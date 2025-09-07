@@ -52,8 +52,11 @@ export default function SignupPage() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Link to="/" className="flex items-center justify-center space-x-2">
-            <Layers className="h-12 w-12 text-indigo-600" />
-            <span className="text-3xl font-bold text-gray-900">SlideFlow</span>
+            <img 
+              src="https://storage.googleapis.com/msgsndr/QFjnAi2H2A9Cpxi7l0ri/media/68bdde997b3d2f00448d506d.png" 
+              alt="SlideFlow" 
+              className="h-12 w-auto"
+            />
           </Link>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">Create your account</h2>
           <p className="mt-2 text-gray-600">Start creating amazing carousels today</p>

@@ -224,8 +224,11 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="flex items-center justify-center space-x-2 mb-4">
-              <Star className="h-6 w-6 text-teal-400" />
-              <span className="text-2xl font-bold">SlideFlow</span>
+              <img 
+                src="https://storage.googleapis.com/msgsndr/QFjnAi2H2A9Cpxi7l0ri/media/68bdde997b3d2f00448d506d.png" 
+                alt="SlideFlow" 
+                className="h-8 w-auto"
+              />
             </div>
             <p className="text-gray-400">
               © 2024 SlideFlow. All rights reserved. Made for creators, by creators.
