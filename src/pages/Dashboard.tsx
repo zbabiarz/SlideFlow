@@ -8,9 +8,9 @@ import {
   Copy, 
   Trash2, 
   Download, 
-  Calendar,
-  BarChart3,
-  Crown
+  CalendarCheck2,
+  TrendingUp,
+  Star
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -40,7 +40,7 @@ export default function Dashboard() {
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <div className="flex items-center">
                 <div className="p-2 bg-indigo-100 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-indigo-600" />
+                  <TrendingUp className="h-6 w-6 text-indigo-600" />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm text-gray-600">Carousels Created</p>
@@ -52,7 +52,7 @@ export default function Dashboard() {
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <div className="flex items-center">
                 <div className="p-2 bg-teal-100 rounded-lg">
-                  <Calendar className="h-6 w-6 text-teal-600" />
+                  <CalendarCheck2 className="h-6 w-6 text-teal-600" />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm text-gray-600">This Month</p>
@@ -64,7 +64,7 @@ export default function Dashboard() {
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <div className="flex items-center">
                 <div className="p-2 bg-purple-100 rounded-lg">
-                  <Crown className="h-6 w-6 text-purple-600" />
+                  <Star className="h-6 w-6 text-purple-600" />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm text-gray-600">Plan</p>
