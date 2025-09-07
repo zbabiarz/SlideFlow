@@ -140,7 +140,12 @@ export default function LandingPage() {
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Simple Pricing</h2>
+            <SparklesText 
+              text="Simple Pricing" 
+              className="text-4xl font-bold text-gray-900 mb-4"
+              colors={{ first: '#14b8a6', second: '#0891b2' }}
+              sparklesCount={8}
+            />
             <p className="text-xl text-gray-600">Start free, upgrade when you need more</p>
           </div>
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
