@@ -123,7 +123,12 @@ export default function LandingPage() {
       <section id="examples" className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Example Carousels</h2>
+            <SparklesText 
+              text="Example Carousels" 
+              className="text-4xl font-bold text-gray-900 mb-4"
+              colors={{ first: '#14b8a6', second: '#0891b2' }}
+              sparklesCount={8}
+            />
             <p className="text-xl text-gray-600 mb-8">See what SlideFlow can create for you</p>
             <p className="text-gray-600">Scroll to explore different carousel styles</p>
           </div>
