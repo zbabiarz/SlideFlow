@@ -5,9 +5,9 @@ import CircularGalleryDemo from '../components/CircularGalleryDemo';
 import { SparklesText } from '../components/ui/sparkles-text';
 import { 
   ArrowRight, 
-  Upload, 
-  Wand2, 
-  Download, 
+  ImagePlus,
+  Sparkles,
+  Package,
   Check,
   Star,
   Users,
@@ -17,17 +17,17 @@ import {
 export default function LandingPage() {
   const features = [
     {
-      icon: <Upload className="h-6 w-6" />,
+      icon: <ImagePlus className="h-6 w-6" />,
       title: 'Upload Photos',
       description: 'Simply upload your images and add a short description of your message.'
     },
     {
-      icon: <Wand2 className="h-6 w-6" />,
+      icon: <Sparkles className="h-6 w-6" />,
       title: 'AI Generation',
       description: 'Our AI creates professional captions, layouts, and cohesive design automatically.'
     },
     {
-      icon: <Download className="h-6 w-6" />,
+      icon: <Package className="h-6 w-6" />,
       title: 'Export Ready',
       description: 'Download your carousel as optimized 1080x1080px images ready for Instagram.'
     }
