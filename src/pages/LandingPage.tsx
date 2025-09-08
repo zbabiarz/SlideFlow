@@ -54,7 +54,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen">
-      <Navbar transparent />
+      <Navbar />
       
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-800 pt-20">
