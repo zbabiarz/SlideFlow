@@ -53,7 +53,7 @@ export default function SignupPage() {
         <div className="text-center">
           <Link to="/" className="flex items-center justify-center space-x-2">
             <img 
-              src="https://storage.googleapis.com/msgsndr/QFjnAi2H2A9Cpxi7l0ri/media/68bdde997b3d2f00448d506d.png" 
+             src="https://storage.googleapis.com/msgsndr/QFjnAi2H2A9Cpxi7l0ri/media/68be257c8301fae5278d79db.png" 
               alt="SlideFlow" 
               className="h-12 w-auto"
             />
