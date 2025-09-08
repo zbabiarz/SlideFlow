@@ -7,7 +7,7 @@ import {
   ArrowRight, 
   ImagePlus,
   Sparkles,
-  Package,
+  Download,
   Check,
   Star,
   Users,
@@ -28,8 +28,8 @@ export default function LandingPage() {
       description: 'Our AI creates professional captions, layouts, and cohesive design automatically.'
     },
     {
-      icon: <Package className="h-6 w-6" />,
-      title: 'Export Ready',
+      icon: <Download className="h-6 w-6" />,
+      title: 'Download',
       description: 'Download your carousel as optimized 1080x1080px images ready for Instagram.'
     }
   ];
