@@ -15,6 +15,7 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   loginWithGoogle: () => Promise<boolean>;
+  loginWithFacebook: () => Promise<boolean>;
   signup: (email: string, password: string, name: string) => Promise<boolean>;
   logout: () => Promise<void>;
   loading: boolean;
@@ -159,6 +160,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const loginWithFacebook = async (): Promise<boolean> => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`
+        }
+      });
+
+      if (error) {
+        console.error('Facebook login error:', error.message);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Facebook login error:', error);
+      return false;
+    }
+  };
+
   const signup = async (email: string, password: string, name: string): Promise<boolean> => {
     try {
       const { error } = await supabase.auth.signUp({
@@ -229,6 +251,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     login,
     loginWithGoogle,
+    loginWithFacebook,
     signup,
     logout,
     loading,
