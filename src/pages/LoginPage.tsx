@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Layers, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
@@ -19,14 +20,43 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const success = await login(email, password);
-      if (success) {
-        navigate('/dashboard');
-      } else {
-        setError('Invalid credentials');
+      // Check if we're using placeholder credentials
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (supabaseUrl?.includes('placeholder')) {
+        setError('Please set up your Supabase credentials to enable authentication');
+        setLoading(false);
+        return;
       }
+
+      // Get the latest auth error from Supabase
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        // Handle specific Supabase error codes with user-friendly messages
+        switch (authError.message) {
+          case 'Invalid login credentials':
+            setError('Invalid email or password. Please check your credentials and try again.');
+            break;
+          case 'Email not confirmed':
+            setError('Please check your email and click the confirmation link before signing in.');
+            break;
+          case 'Too many requests':
+            setError('Too many login attempts. Please wait a moment before trying again.');
+            break;
+          default:
+            setError(authError.message);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // If no error, navigate to dashboard
+      navigate('/dashboard');
     } catch (err) {
-      setError('Login failed');
+      setError('Login failed. Please try again.');
     } finally {
       setLoading(false);
     }

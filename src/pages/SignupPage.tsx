@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Layers, Eye, EyeOff } from 'lucide-react';
 
 export default function SignupPage() {
@@ -20,14 +21,43 @@ export default function SignupPage() {
     setError('');
 
     try {
-      const success = await signup(email, password, name);
-      if (success) {
-        navigate('/dashboard');
-      } else {
-        setError('Signup failed');
+      // Check if we're using placeholder credentials
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (supabaseUrl?.includes('placeholder')) {
+        setError('Please set up your Supabase credentials to enable authentication');
+        setLoading(false);
+        return;
       }
+
+      // Handle signup directly to get better error messages
+      const { error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+          }
+        }
+      });
+
+      if (authError) {
+        // Handle specific Supabase error codes with user-friendly messages
+        if (authError.message.includes('rate_limit')) {
+          const waitTime = authError.message.match(/\d+/)?.[0] || '60';
+          setError(`Too many signup attempts. Please wait ${waitTime} seconds before trying again.`);
+        } else if (authError.message.includes('already registered')) {
+          setError('An account with this email already exists. Try signing in instead.');
+        } else {
+          setError(authError.message);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Success message for email confirmation
+      setError('Account created successfully! Please check your email to confirm your account.');
     } catch (err) {
-      setError('Signup failed');
+      setError('Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -64,7 +94,11 @@ export default function SignupPage() {
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl">
+            <div className={`border px-4 py-3 rounded-xl ${
+              error.includes('successfully') 
+                ? 'bg-green-50 border-green-200 text-green-600'
+                : 'bg-red-50 border-red-200 text-red-600'
+            }`}>
               {error}
             </div>
           )}

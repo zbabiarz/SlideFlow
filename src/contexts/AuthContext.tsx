@@ -127,6 +127,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) {
         console.error('Login error:', error.message);
+        // Don't throw here, let the page handle the specific error message
         return false;
       }
 
