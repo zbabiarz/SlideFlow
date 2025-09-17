@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCarousel } from '../contexts/CarouselContext';
 import { useContentLibrary } from '../contexts/ContentLibraryContext';
+import ImportLibraryModal from '../components/ImportLibraryModal';
 import Navbar from '../components/Navbar';
 import { 
   Upload, 
@@ -18,6 +19,7 @@ export default function Generator() {
   const [description, setDescription] = useState('');
   const [style, setStyle] = useState<'minimalist' | 'bold' | 'elegant'>('minimalist');
   const [generating, setGenerating] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   
   const { user, updateUser } = useAuth();
   const { addCarousel, setCurrentCarousel } = useCarousel();
@@ -33,6 +35,10 @@ export default function Generator() {
     if (newFiles.length > 0) {
       addImages(newFiles);
     }
+  };
+
+  const handleImportFromLibrary = (importedImages: File[]) => {
+    setImages(prev => [...prev, ...importedImages]);
   };
 
   const removeImage = (index: number) => {
@@ -147,13 +153,14 @@ export default function Generator() {
                       />
                     </label>
                     <span className="text-gray-500">or</span>
-                    <Link
-                      to="/content-library"
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      type="button"
                       className="inline-flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
                     >
                       <FolderOpen className="h-4 w-4 mr-2" />
-                      Browse Library
-                    </Link>
+                      Import from Library
+                    </button>
                   </div>
                 </div>
               )}
@@ -244,6 +251,15 @@ export default function Generator() {
               </button>
             </div>
           </div>
+
+          {/* Import Library Modal */}
+          <ImportLibraryModal
+            isOpen={showImportModal}
+            onClose={() => setShowImportModal(false)}
+            onImport={handleImportFromLibrary}
+            maxImages={10}
+            currentImageCount={images.length}
+          />
         </div>
       </main>
     </div>
