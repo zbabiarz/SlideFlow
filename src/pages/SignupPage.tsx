@@ -47,9 +47,9 @@ export default function SignupPage() {
 
       // Success message for email confirmation
       setError('Account created successfully! Please check your email to confirm your account.');
+      setLoading(false);
     } catch (err) {
       setError('Signup failed. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
