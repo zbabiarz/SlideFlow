@@ -30,10 +30,34 @@ export default function Generator() {
   const [generating, setGenerating] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   
+  // Brand presets state
+  const [presets, setPresets] = useState<Array<{
+    id: string;
+    name: string;
+    colors: typeof customColors;
+    primaryFont: string;
+    secondaryFont: string;
+  }>>([]);
+  const [presetName, setPresetName] = useState('');
+  const [selectedPreset, setSelectedPreset] = useState('');
+  
   const { user, updateUser } = useAuth();
   const { addCarousel, setCurrentCarousel } = useCarousel();
   const { addImages } = useContentLibrary();
   const navigate = useNavigate();
+
+  // Load presets from localStorage on component mount
+  React.useEffect(() => {
+    const savedPresets = localStorage.getItem('slideflow_brand_presets');
+    if (savedPresets) {
+      setPresets(JSON.parse(savedPresets));
+    }
+  }, []);
+
+  // Save presets to localStorage whenever presets change
+  React.useEffect(() => {
+    localStorage.setItem('slideflow_brand_presets', JSON.stringify(presets));
+  }, [presets]);
 
   // Universal font list for web-safe fonts
   const universalFonts = [
@@ -69,6 +93,44 @@ export default function Generator() {
     // Also add to content library
     if (newFiles.length > 0) {
       addImages(newFiles);
+    }
+  };
+
+  const savePreset = () => {
+    if (!presetName.trim()) {
+      alert('Please enter a preset name');
+      return;
+    }
+    
+    const newPreset = {
+      id: Date.now().toString(),
+      name: presetName.trim(),
+      colors: { ...customColors },
+      primaryFont,
+      secondaryFont
+    };
+    
+    setPresets(prev => [...prev, newPreset]);
+    setPresetName('');
+    alert(`Preset "${newPreset.name}" saved successfully!`);
+  };
+
+  const applyPreset = (presetId: string) => {
+    const preset = presets.find(p => p.id === presetId);
+    if (preset) {
+      setCustomColors(preset.colors);
+      setPrimaryFont(preset.primaryFont);
+      setSecondaryFont(preset.secondaryFont);
+      setSkipCustomColors(false); // Enable custom colors when applying preset
+    }
+  };
+
+  const deletePreset = (presetId: string) => {
+    if (confirm('Delete this preset?')) {
+      setPresets(prev => prev.filter(p => p.id !== presetId));
+      if (selectedPreset === presetId) {
+        setSelectedPreset('');
+      }
     }
   };
 
