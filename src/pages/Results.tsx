@@ -10,7 +10,8 @@ import {
   Copy, 
   Share2,
   Instagram,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 
 export default function Results() {
@@ -66,6 +67,20 @@ ${currentCarousel.description}
     setInstagramCaption(mockCaption);
   };
 
+  const regenerateSlide = async (slideIndex: number) => {
+    if (!currentCarousel) return;
+    
+    // Mock AI regeneration process
+    const confirmed = confirm(`Regenerate slide ${slideIndex + 1} with AI? This will create a new version of this slide.`);
+    if (!confirmed) return;
+
+    // Show loading state (you could add a loading state to the component)
+    alert('Regenerating slide with AI... (This is a demo)');
+    
+    // In a real implementation, this would call your AI regeneration API
+    // The API would generate a new image while keeping the same caption/text content
+    console.log(`Regenerating slide ${slideIndex + 1} for carousel ${currentCarousel.id}`);
+  };
   const handleExport = () => {
     // Mock export functionality
     alert('Export functionality would download all slides as high-quality 1080x1080px images in a ZIP file.');
@@ -134,19 +149,32 @@ ${currentCarousel.description}
               {/* Slide Thumbnails */}
               <div className="flex space-x-2 overflow-x-auto pb-2">
                 {currentCarousel.slides.map((slide, index) => (
-                  <button
+                  <div
                     key={slide.id}
-                    onClick={() => setCurrentSlide(index)}
-                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                      index === currentSlide ? 'border-indigo-500' : 'border-transparent'
-                    }`}
+                    className="relative flex-shrink-0 group"
                   >
-                    <img
-                      src={slide.image}
-                      alt={`Slide ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
+                    <button
+                      onClick={() => setCurrentSlide(index)}
+                      className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                      index === currentSlide ? 'border-indigo-500' : 'border-transparent'
+                      }`}
+                    >
+                      <img
+                        src={slide.image}
+                        alt={`Slide ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                    
+                    {/* Regenerate button - shows on hover */}
+                    <button
+                      onClick={() => regenerateSlide(index)}
+                      className="absolute -top-1 -right-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 transform hover:scale-110 shadow-lg"
+                      title={`Regenerate slide ${index + 1} with AI`}
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
