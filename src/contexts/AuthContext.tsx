@@ -132,13 +132,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signup = async (email: string, password: string, name: string): Promise<boolean> => {
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             name: name,
-          }
+          },
+          emailRedirectTo: window.location.origin + '/dashboard'
         }
       });
 
@@ -147,10 +148,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false;
       }
 
+      // If user is confirmed immediately, create profile
+      if (data.user && data.session) {
+        await createUserProfile(data.user, name);
+      }
+
       return true;
     } catch (error) {
       console.error('Signup error:', error);
       return false;
+    }
+  };
+
+  const createUserProfile = async (user: SupabaseUser, name: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          email: user.email || '',
+          name: name,
+          plan: 'free',
+          carousels_generated: 0,
+          max_carousels: 1
+        });
+
+      if (error) {
+        console.error('Error creating profile:', error);
+      }
+    } catch (error) {
+      console.error('Error in createUserProfile:', error);
     }
   };
 
