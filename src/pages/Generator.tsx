@@ -25,6 +25,8 @@ export default function Generator() {
     accent2: '#EF4444'
   });
   const [skipCustomColors, setSkipCustomColors] = useState(false);
+  const [primaryFont, setPrimaryFont] = useState('Inter, sans-serif');
+  const [secondaryFont, setSecondaryFont] = useState('Roboto, sans-serif');
   const [generating, setGenerating] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   
@@ -32,6 +34,32 @@ export default function Generator() {
   const { addCarousel, setCurrentCarousel } = useCarousel();
   const { addImages } = useContentLibrary();
   const navigate = useNavigate();
+
+  // Universal font list for web-safe fonts
+  const universalFonts = [
+    { name: 'Inter', value: 'Inter, sans-serif' },
+    { name: 'Roboto', value: 'Roboto, sans-serif' },
+    { name: 'Open Sans', value: 'Open Sans, sans-serif' },
+    { name: 'Lato', value: 'Lato, sans-serif' },
+    { name: 'Montserrat', value: 'Montserrat, sans-serif' },
+    { name: 'Source Sans Pro', value: 'Source Sans Pro, sans-serif' },
+    { name: 'Raleway', value: 'Raleway, sans-serif' },
+    { name: 'Ubuntu', value: 'Ubuntu, sans-serif' },
+    { name: 'Nunito', value: 'Nunito, sans-serif' },
+    { name: 'Poppins', value: 'Poppins, sans-serif' },
+    { name: 'Playfair Display', value: 'Playfair Display, serif' },
+    { name: 'Merriweather', value: 'Merriweather, serif' },
+    { name: 'Georgia', value: 'Georgia, serif' },
+    { name: 'Times New Roman', value: 'Times New Roman, serif' },
+    { name: 'Arial', value: 'Arial, sans-serif' },
+    { name: 'Helvetica', value: 'Helvetica, sans-serif' },
+    { name: 'Verdana', value: 'Verdana, sans-serif' },
+    { name: 'Trebuchet MS', value: 'Trebuchet MS, sans-serif' },
+    { name: 'Tahoma', value: 'Tahoma, sans-serif' },
+    { name: 'Courier New', value: 'Courier New, monospace' },
+    { name: 'Monaco', value: 'Monaco, monospace' },
+    { name: 'Consolas', value: 'Consolas, monospace' },
+  ];
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -72,6 +100,8 @@ export default function Generator() {
       description,
       style,
       customColors: skipCustomColors ? null : customColors,
+      primaryFont,
+      secondaryFont,
       createdAt: new Date().toISOString().split('T')[0],
       slides: images.map((_, index) => ({
         id: (index + 1).toString(),
@@ -325,6 +355,62 @@ export default function Generator() {
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Font Selection */}
+            <div>
+              <label className="block text-lg font-semibold text-gray-900 mb-4">
+                Font Selection (Optional)
+              </label>
+              <p className="text-gray-600 mb-6">Choose custom fonts for your carousel design</p>
+              
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Primary Font
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={primaryFont}
+                      onChange={(e) => setPrimaryFont(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white max-h-40 overflow-y-auto"
+                      style={{ fontFamily: primaryFont }}
+                    >
+                      {universalFonts.map((font) => (
+                        <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                          {font.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1" style={{ fontFamily: primaryFont }}>
+                    Preview: The quick brown fox jumps
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Secondary Font
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={secondaryFont}
+                      onChange={(e) => setSecondaryFont(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white max-h-40 overflow-y-auto"
+                      style={{ fontFamily: secondaryFont }}
+                    >
+                      {universalFonts.map((font) => (
+                        <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                          {font.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1" style={{ fontFamily: secondaryFont }}>
+                    Preview: The quick brown fox jumps
+                  </p>
                 </div>
               </div>
             </div>
