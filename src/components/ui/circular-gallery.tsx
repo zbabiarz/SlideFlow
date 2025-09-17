@@ -20,10 +20,12 @@ interface CircularGalleryProps extends HTMLAttributes<HTMLDivElement> {
   radius?: number;
   /** Controls the speed of auto-rotation when not scrolling. */
   autoRotateSpeed?: number;
+  /** Controls if scroll direction should be reversed. */
+  reverseScrollDirection?: boolean;
 }
 
 const CircularGallery = React.forwardRef<HTMLDivElement, CircularGalleryProps>(
-  ({ items, className, radius = 400, autoRotateSpeed = 0.02, ...props }, ref) => {
+  ({ items, className, radius = 400, autoRotateSpeed = 0.02, reverseScrollDirection = false, ...props }, ref) => {
     const [rotation, setRotation] = useState(0);
     const [isScrolling, setIsScrolling] = useState(false);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -39,7 +41,7 @@ const CircularGallery = React.forwardRef<HTMLDivElement, CircularGalleryProps>(
 
         const scrollableHeight = document.documentElement.scrollHeight - window.innerHeight;
         const scrollProgress = scrollableHeight > 0 ? window.scrollY / scrollableHeight : 0;
-        const scrollRotation = scrollProgress * 360;
+        const scrollRotation = scrollProgress * 360 * (reverseScrollDirection ? -1 : 1);
         setRotation(scrollRotation);
 
         scrollTimeoutRef.current = setTimeout(() => {

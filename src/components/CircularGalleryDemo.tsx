@@ -89,10 +89,20 @@ const CircularGalleryDemo = () => {
     <div className="w-full h-[1200px] relative">
       <div className="absolute inset-0">
         <div className="relative h-[600px]">
-          <CircularGallery items={carouselExamples} radius={350} autoRotateSpeed={0.02} />
+          <CircularGallery 
+            items={carouselExamples} 
+            radius={350} 
+            autoRotateSpeed={0.02} 
+            reverseScrollDirection={false}
+          />
         </div>
         <div className="relative h-[600px]">
-          <CircularGallery items={carouselExamples} radius={350} autoRotateSpeed={-0.02} />
+          <CircularGallery 
+            items={carouselExamples} 
+            radius={350} 
+            autoRotateSpeed={-0.02} 
+            reverseScrollDirection={true}
+          />
         </div>
       </div>
     </div>
