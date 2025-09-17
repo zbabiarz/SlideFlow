@@ -24,6 +24,7 @@ export default function Generator() {
     accent1: '#F59E0B',
     accent2: '#EF4444'
   });
+  const [skipCustomColors, setSkipCustomColors] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   
@@ -70,6 +71,7 @@ export default function Generator() {
       title: description.slice(0, 50) + (description.length > 50 ? '...' : ''),
       description,
       style,
+      customColors: skipCustomColors ? null : customColors,
       createdAt: new Date().toISOString().split('T')[0],
       slides: images.map((_, index) => ({
         id: (index + 1).toString(),
@@ -208,11 +210,27 @@ export default function Generator() {
 
             {/* Color Customization */}
             <div>
-              <label className="block text-lg font-semibold text-gray-900 mb-4">
-                Custom Colors (Optional)
-              </label>
-              <p className="text-gray-600 mb-4">Customize the colors used in your carousel design</p>
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="flex items-center justify-between mb-4">
+                <label className="block text-lg font-semibold text-gray-900">
+                  Custom Colors (Optional)
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={skipCustomColors}
+                    onChange={(e) => setSkipCustomColors(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 focus:ring-2 mr-2"
+                  />
+                  <span className="text-sm text-gray-600">Skip custom colors</span>
+                </label>
+              </div>
+              <p className="text-gray-600 mb-4">
+                {skipCustomColors 
+                  ? 'Using default colors based on selected style' 
+                  : 'Customize the colors used in your carousel design'
+                }
+              </p>
+              <div className={`grid md:grid-cols-2 gap-6 transition-opacity ${skipCustomColors ? 'opacity-50' : ''}`}>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -222,14 +240,16 @@ export default function Generator() {
                       <input
                         type="color"
                         value={customColors.primary}
+                        disabled={skipCustomColors}
                         onChange={(e) => setCustomColors(prev => ({ ...prev, primary: e.target.value }))}
                         className="w-12 h-12 rounded-lg border-2 border-gray-300 cursor-pointer"
                       />
                       <input
                         type="text"
                         value={customColors.primary}
+                        disabled={skipCustomColors}
                         onChange={(e) => setCustomColors(prev => ({ ...prev, primary: e.target.value }))}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                         placeholder="#3B82F6"
                       />
                     </div>
@@ -243,14 +263,16 @@ export default function Generator() {
                       <input
                         type="color"
                         value={customColors.secondary}
+                        disabled={skipCustomColors}
                         onChange={(e) => setCustomColors(prev => ({ ...prev, secondary: e.target.value }))}
                         className="w-12 h-12 rounded-lg border-2 border-gray-300 cursor-pointer"
                       />
                       <input
                         type="text"
                         value={customColors.secondary}
+                        disabled={skipCustomColors}
                         onChange={(e) => setCustomColors(prev => ({ ...prev, secondary: e.target.value }))}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                         placeholder="#10B981"
                       />
                     </div>
@@ -266,14 +288,16 @@ export default function Generator() {
                       <input
                         type="color"
                         value={customColors.accent1}
+                        disabled={skipCustomColors}
                         onChange={(e) => setCustomColors(prev => ({ ...prev, accent1: e.target.value }))}
                         className="w-12 h-12 rounded-lg border-2 border-gray-300 cursor-pointer"
                       />
                       <input
                         type="text"
                         value={customColors.accent1}
+                        disabled={skipCustomColors}
                         onChange={(e) => setCustomColors(prev => ({ ...prev, accent1: e.target.value }))}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                         placeholder="#F59E0B"
                       />
                     </div>
@@ -287,14 +311,16 @@ export default function Generator() {
                       <input
                         type="color"
                         value={customColors.accent2}
+                        disabled={skipCustomColors}
                         onChange={(e) => setCustomColors(prev => ({ ...prev, accent2: e.target.value }))}
                         className="w-12 h-12 rounded-lg border-2 border-gray-300 cursor-pointer"
                       />
                       <input
                         type="text"
                         value={customColors.accent2}
+                        disabled={skipCustomColors}
                         onChange={(e) => setCustomColors(prev => ({ ...prev, accent2: e.target.value }))}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                         placeholder="#EF4444"
                       />
                     </div>
