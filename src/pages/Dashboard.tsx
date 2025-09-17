@@ -11,7 +11,8 @@ import {
   CalendarCheck2,
   TrendingUp,
   Star,
-  Clock
+  Clock,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -92,13 +93,22 @@ export default function Dashboard() {
           {/* Actions */}
           <div className="mb-8">
             {canGenerate ? (
-              <Link
-                to="/generate"
-                className="inline-flex items-center px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded-xl transition-colors"
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                Create New Carousel
-              </Link>
+              <div className="flex items-center space-x-4">
+                <Link
+                  to="/generate"
+                  className="inline-flex items-center px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded-xl transition-colors"
+                >
+                  <Plus className="h-5 w-5 mr-2" />
+                  Create New Carousel
+                </Link>
+                <Link
+                  to="/content-library"
+                  className="inline-flex items-center px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-xl transition-colors"
+                >
+                  <ImageIcon className="h-5 w-5 mr-2" />
+                  Content Library
+                </Link>
+              </div>
             ) : (
               <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
                 <p className="text-orange-800 font-medium">

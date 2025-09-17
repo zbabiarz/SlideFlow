@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCarousel } from '../contexts/CarouselContext';
+import { useContentLibrary } from '../contexts/ContentLibraryContext';
 import Navbar from '../components/Navbar';
 import { 
   Upload, 
   X, 
   Wand2, 
   Image as ImageIcon,
-  ArrowRight
+  ArrowRight,
+  FolderOpen
 } from 'lucide-react';
 
 export default function Generator() {
@@ -19,11 +21,18 @@ export default function Generator() {
   
   const { user, updateUser } = useAuth();
   const { addCarousel, setCurrentCarousel } = useCarousel();
+  const { addImages } = useContentLibrary();
   const navigate = useNavigate();
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setImages(prev => [...prev, ...files].slice(0, 10));
+    const newFiles = files.slice(0, 10 - images.length);
+    setImages(prev => [...prev, ...newFiles]);
+    
+    // Also add to content library
+    if (newFiles.length > 0) {
+      addImages(newFiles);
+    }
   };
 
   const removeImage = (index: number) => {
@@ -125,17 +134,27 @@ export default function Generator() {
                   <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">Upload your images</h3>
                   <p className="text-gray-600 mb-4">Select up to 10 images for your carousel</p>
-                  <label className="inline-flex items-center px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg cursor-pointer hover:bg-indigo-200 transition-colors">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Choose Files
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </label>
+                  <div className="flex items-center justify-center space-x-3">
+                    <label className="inline-flex items-center px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg cursor-pointer hover:bg-indigo-200 transition-colors">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Choose Files
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    <span className="text-gray-500">or</span>
+                    <Link
+                      to="/content-library"
+                      className="inline-flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                    >
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Browse Library
+                    </Link>
+                  </div>
                 </div>
               )}
             </div>

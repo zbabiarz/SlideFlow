@@ -9,7 +9,9 @@ import Generator from './pages/Generator';
 import Results from './pages/Results';
 import Profile from './pages/Profile';
 import Billing from './pages/Billing';
+import ContentLibrary from './pages/ContentLibrary';
 import { CarouselProvider } from './contexts/CarouselContext';
+import { ContentLibraryProvider } from './contexts/ContentLibraryContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -28,42 +30,49 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <AuthProvider>
-      <CarouselProvider>
-        <Router>
-          <div className="min-h-screen bg-gray-50">
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/generate" element={
-                <ProtectedRoute>
-                  <Generator />
-                </ProtectedRoute>
-              } />
-              <Route path="/results" element={
-                <ProtectedRoute>
-                  <Results />
-                </ProtectedRoute>
-              } />
-              <Route path="/profile" element={
-                <ProtectedRoute>
-                  <Profile />
-                </ProtectedRoute>
-              } />
-              <Route path="/billing" element={
-                <ProtectedRoute>
-                  <Billing />
-                </ProtectedRoute>
-              } />
-            </Routes>
-          </div>
-        </Router>
-      </CarouselProvider>
+      <ContentLibraryProvider>
+        <CarouselProvider>
+          <Router>
+            <div className="min-h-screen bg-gray-50">
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/dashboard" element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/generate" element={
+                  <ProtectedRoute>
+                    <Generator />
+                  </ProtectedRoute>
+                } />
+                <Route path="/results" element={
+                  <ProtectedRoute>
+                    <Results />
+                  </ProtectedRoute>
+                } />
+                <Route path="/profile" element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                } />
+                <Route path="/billing" element={
+                  <ProtectedRoute>
+                    <Billing />
+                  </ProtectedRoute>
+                } />
+                <Route path="/content-library" element={
+                  <ProtectedRoute>
+                    <ContentLibrary />
+                  </ProtectedRoute>
+                } />
+              </Routes>
+            </div>
+          </Router>
+        </CarouselProvider>
+      </ContentLibraryProvider>
     </AuthProvider>
   );
 }
