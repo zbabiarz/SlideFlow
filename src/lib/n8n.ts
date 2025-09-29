@@ -1,18 +1,19 @@
-// n8n API helper functions
-const N8N_BASE_URL = import.meta.env.VITE_N8N_URL || 'http://localhost:5678';
+const N8N_BASE = "https://sleepyseamonster.app.n8n.cloud/webhook";
 
-export async function n8nPost(endpoint: string, data: any) {
-  const response = await fetch(`${N8N_BASE_URL}${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
+export async function n8nPost<T = any>(path: string, body: unknown) {
+  const res = await fetch(`${N8N_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<T>;
+}
 
-  if (!response.ok) {
-    throw new Error(`N8N API error: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
+export async function n8nGet<T = any>(path: string, params?: Record<string,string>) {
+  const url = new URL(`${N8N_BASE}${path}`);
+  if (params) Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<T>;
 }
