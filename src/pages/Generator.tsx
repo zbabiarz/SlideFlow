@@ -225,11 +225,20 @@ export default function Generator() {
         brand_profile_id: brand.brand_profile_id
       });
 
+      // Log the carousel response to debug the structure
+      console.log('N8N carousel response:', carousel);
+
+      // Get carousel ID (N8N might return it as 'id' or 'carousel_id')
+      const carouselId = carousel.carousel_id || carousel.id;
+      
+      if (!carouselId) {
+        throw new Error('No carousel ID returned from N8N');
+      }
       // Create slides
       let pos = 1;
       for (const media_id of mediaIds) {
         await n8nPost("/carousel_slide", {
-          carousel_id: carousel.carousel_id,
+          carousel_id: carouselId,
           media_id,
           position: pos
         });
@@ -238,7 +247,7 @@ export default function Generator() {
 
       // Fetch the generated carousel from the database and navigate to results
       try {
-        const generatedCarousel = await fetchCarousel(carousel.carousel_id);
+        const generatedCarousel = await fetchCarousel(carouselId);
         if (generatedCarousel) {
           setCurrentCarousel(generatedCarousel);
           navigate('/results');
