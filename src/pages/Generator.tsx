@@ -70,7 +70,7 @@ export default function Generator() {
   const [selectedPreset, setSelectedPreset] = useState('');
   
   const { user, updateUser } = useAuth();
-  const { addCarousel, setCurrentCarousel } = useCarousel();
+  const { addCarousel, setCurrentCarousel, fetchCarousel } = useCarousel();
   const { addImages } = useContentLibrary();
   const navigate = useNavigate();
 
