@@ -14,7 +14,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
-  loginWithGoogle: () => Promise<boolean>;
+  loginWithInstagram: () => Promise<boolean>;
   signup: (email: string, password: string, name: string) => Promise<boolean>;
   logout: () => void;
   loading: boolean;
@@ -94,23 +94,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const loginWithGoogle = async (): Promise<boolean> => {
+  const loginWithInstagram = async (): Promise<boolean> => {
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: 'instagram',
         options: {
           redirectTo: `${window.location.origin}/generate`
         }
       });
 
       if (error) {
-        console.error('Google login error:', error.message);
+        console.error('Instagram login error:', error.message);
         return false;
       }
 
       return true; // OAuth will handle the redirect
     } catch (error) {
-      console.error('Google login error:', error);
+      console.error('Instagram login error:', error);
       return false;
     }
   };
@@ -162,7 +162,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value = {
     user,
     login,
-    loginWithGoogle,
+    loginWithInstagram,
     signup,
     logout,
     loading,
