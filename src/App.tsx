@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { Dashboard } from './pages/Dashboard';
+import LandingPage from './pages/LandingPage';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { Pricing } from './pages/Pricing';
@@ -21,11 +22,12 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-        <Route path="/signup" element={user ? <Navigate to="/" /> : <Signup />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/signup" element={user ? <Navigate to="/dashboard" /> : <Signup />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
         <Route path="/success" element={user ? <Success /> : <Navigate to="/login" />} />
-        <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
       </Routes>
     </Router>
   );
