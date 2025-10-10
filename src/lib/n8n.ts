@@ -1,13 +1,18 @@
-const N8N_BASE = "https://sleepyseamonster.app.n8n.cloud/webhook";
+const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/n8n-proxy`;
 
 export async function n8nPost<T = any>(path: string, body: unknown) {
   try {
-    const res = await fetch(`${N8N_BASE}${path}`, {
+    const res = await fetch(PROXY_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        path,
+        body,
+        method: "POST"
+      }),
     });
 
     if (!res.ok) {
@@ -17,18 +22,39 @@ export async function n8nPost<T = any>(path: string, body: unknown) {
 
     return res.json() as Promise<T>;
   } catch (error: any) {
-    if (error.message?.includes('CORS')) {
-      console.error('CORS error detected. The n8n webhook needs to be configured with proper CORS headers.');
-      throw new Error('Connection failed. Please ensure the webhook is configured to allow requests from this domain.');
-    }
+    console.error('n8n request error:', error);
     throw error;
   }
 }
 
 export async function n8nGet<T = any>(path: string, params?: Record<string,string>) {
-  const url = new URL(`${N8N_BASE}${path}`);
-  if (params) Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<T>;
+  try {
+    let fullPath = path;
+    if (params) {
+      const queryString = new URLSearchParams(params).toString();
+      fullPath = `${path}?${queryString}`;
+    }
+
+    const res = await fetch(PROXY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        path: fullPath,
+        method: "GET"
+      }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errorText}`);
+    }
+
+    return res.json() as Promise<T>;
+  } catch (error: any) {
+    console.error('n8n request error:', error);
+    throw error;
+  }
 }
