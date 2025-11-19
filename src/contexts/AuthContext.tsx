@@ -45,9 +45,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        setUserFromSupabase(session.user);
+        await setUserFromSupabase(session.user);
       }
       setLoading(false);
     });
@@ -55,26 +55,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        setUserFromSupabase(session.user);
-      } else {
-        setUser(null);
-      }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      (async () => {
+        if (session?.user) {
+          await setUserFromSupabase(session.user);
+        } else {
+          setUser(null);
+        }
+      })();
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const setUserFromSupabase = (supabaseUser: SupabaseUser) => {
-    // Create user with Supabase data and default values for custom fields
+  const setUserFromSupabase = async (supabaseUser: SupabaseUser) => {
+    // Fetch profile data from database
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', supabaseUser.id)
+      .maybeSingle();
+
+    // Create user with Supabase data and profile data
     const appUser: User = {
       id: supabaseUser.id,
       email: supabaseUser.email || '',
-      name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
-      plan: 'free',
-      carouselsGenerated: 0,
-      maxCarousels: 1,
+      name: profile?.name || supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
+      plan: profile?.plan || 'free',
+      carouselsGenerated: profile?.carousels_generated || 0,
+      maxCarousels: profile?.max_carousels || 1,
       instagramConnected: !!supabaseUser.user_metadata?.instagram_business_account_id,
       instagramBusinessAccountId: supabaseUser.user_metadata?.instagram_business_account_id,
       facebookAccessToken: supabaseUser.user_metadata?.provider_token
