@@ -36,6 +36,12 @@ export default function ContentLibrary() {
     image.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const selectAllVisible = () => {
+    setSelectedImages(new Set(filteredImages.map(img => img.id)));
+  };
+
+  const clearSelection = () => setSelectedImages(new Set());
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -110,11 +116,17 @@ export default function ContentLibrary() {
                 </button>
                 {images.length > 0 && (
                   <button
-                    onClick={() => confirm('Clear all images?') && clearLibrary()}
-                    className="inline-flex items-center px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-medium rounded-lg transition-colors"
+                    onClick={() => {
+                      if (selectedImages.size === filteredImages.length) {
+                        clearSelection();
+                      } else {
+                        selectAllVisible();
+                      }
+                    }}
+                    className="inline-flex items-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium rounded-lg transition-colors"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Clear All
+                    {selectedImages.size === filteredImages.length ? 'Deselect All' : 'Select All'}
                   </button>
                 )}
               </div>

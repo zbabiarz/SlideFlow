@@ -19,6 +19,7 @@ export default function ImportLibraryModal({
 }: ImportLibraryModalProps) {
   const { images } = useContentLibrary();
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
+  const [importing, setImporting] = useState(false);
 
   const availableSlots = maxImages - currentImageCount;
 
@@ -34,14 +35,30 @@ export default function ImportLibraryModal({
     setSelectedImages(newSelected);
   };
 
-  const handleImport = () => {
-    const selectedLibraryImages = images
-      .filter(img => selectedImages.has(img.id))
-      .map(img => img.file);
-    
-    onImport(selectedLibraryImages);
-    setSelectedImages(new Set());
-    onClose();
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const selectedLibraryImages = await Promise.all(
+        images
+          .filter(img => selectedImages.has(img.id))
+          .map(async (img) => {
+            if (img.file) return img.file;
+            // Remote image: fetch and convert to File so it can be re-used in the generator.
+            const res = await fetch(img.url);
+            const blob = await res.blob();
+            return new File([blob], img.name, { type: blob.type || 'application/octet-stream' });
+          })
+      );
+
+      onImport(selectedLibraryImages);
+      setSelectedImages(new Set());
+      onClose();
+    } catch (error) {
+      console.error('Failed to import images from library:', error);
+      alert('Could not import some images. Please try again.');
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -125,10 +142,10 @@ export default function ImportLibraryModal({
             </button>
             <button
               onClick={handleImport}
-              disabled={selectedImages.size === 0}
+              disabled={selectedImages.size === 0 || importing}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Import {selectedImages.size} Image{selectedImages.size !== 1 ? 's' : ''}
+              {importing ? 'Importing...' : `Import ${selectedImages.size} Image${selectedImages.size !== 1 ? 's' : ''}`}
             </button>
           </div>
         </div>

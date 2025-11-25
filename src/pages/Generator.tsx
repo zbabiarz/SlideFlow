@@ -24,7 +24,7 @@ const MAX_FILES = 10;
 async function uploadOne(userId: string, file: File) {
   const ext = file.name.split(".").pop() || "bin";
   const ts = Date.now();
-  const path = `user_${userId}/${new Date().toISOString().slice(0,10)}/${ts}_${crypto.randomUUID()}.${ext}`;
+  const path = `${userId}/${new Date().toISOString().slice(0,10)}/${ts}_${crypto.randomUUID()}.${ext}`;
 
   const { error } = await supabase.storage
     .from(BUCKET_NAME)
@@ -71,7 +71,7 @@ export default function Generator() {
   
   const { user, updateUser } = useAuth();
   const { addCarousel, setCurrentCarousel, fetchCarousel } = useCarousel();
-  const { addImages } = useContentLibrary();
+  const { addImages, addUploadedFiles } = useContentLibrary();
   const navigate = useNavigate();
 
   // Load presets from localStorage on component mount
@@ -256,6 +256,9 @@ export default function Generator() {
 
       // Upload all files to Supabase
       const uploadedInfos = await Promise.all(images.map(f => uploadOne(userId, f)));
+
+      // Persist the uploaded files into the media library for this user
+      await addUploadedFiles(uploadedInfos);
 
       // Prepare all data to send to single webhook
       const allData = {
