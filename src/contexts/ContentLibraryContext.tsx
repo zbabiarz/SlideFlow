@@ -23,6 +23,14 @@ export interface UploadedFileInfo {
   created_at?: string;
 }
 
+const parseOriginalName = (file: UploadedFileInfo) => {
+  if (file.filename) return file.filename;
+  const base = file.path.split('/').pop() || 'file';
+  // Match patterns like "<timestamp>_<uuid>_<original>"
+  const match = base.match(/^\d+_[\w-]+_(.+)$/);
+  return match?.[1] || base;
+};
+
 interface ContentLibraryContextType {
   images: LibraryImage[];
   addImages: (files: File[]) => void;
@@ -70,6 +78,8 @@ export function ContentLibraryProvider({ children }: ContentLibraryProviderProps
         const results: UploadedFileInfo[] = [];
 
         for (const entry of data || []) {
+          // Skip hidden/system placeholder files
+          if (entry.name.startsWith('.')) continue;
           const fullPath = prefix ? `${prefix}/${entry.name}` : entry.name;
 
           // Folder entries have metadata === null; recurse into them.
@@ -115,7 +125,7 @@ export function ContentLibraryProvider({ children }: ContentLibraryProviderProps
       const newImages: LibraryImage[] = uploadedFiles.map((file, idx) => ({
         id: file.path,
         url: signedUrls?.[idx]?.signedUrl || '',
-        name: file.filename || file.path.split('/').pop() || 'file',
+        name: parseOriginalName(file),
         uploadedAt: file.created_at || new Date().toISOString(),
         size: file.size_bytes || 0,
         path: file.path,
@@ -168,7 +178,7 @@ export function ContentLibraryProvider({ children }: ContentLibraryProviderProps
       const newImages: LibraryImage[] = uploaded.map((file, idx) => ({
         id: file.path,
         url: signedUrls?.[idx]?.signedUrl || '',
-        name: file.filename || file.path.split('/').pop() || 'file',
+        name: parseOriginalName(file),
         uploadedAt: file.created_at || new Date().toISOString(),
         size: file.size_bytes || 0,
         path: file.path,

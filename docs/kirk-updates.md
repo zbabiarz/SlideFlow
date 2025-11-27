@@ -17,7 +17,7 @@ Purpose: running, date-stamped notes for changes made locally after cloning the 
 - Added environment files locally (`.env`, `.env.local`) with Supabase URL/anon key; `src/lib/supabase.ts` now guards missing env vars to prevent blank-screen errors.
 - Fixed storage path to match RLS (`<userId>/<date>/...`); `Generator` uploads now auto-add uploaded files into the media library after Supabase upload.
 - `ContentLibraryContext`: fetches existing storage objects from Supabase (handles both `<userId>/...` and legacy `user_<userId>/...`), signs URLs, dedupes, and removes from storage when deleted in UI.
-- `ImportLibraryModal`: importing remote library items now fetches and rehydrates them as `File` objects; added select-all toggle (with slate styling) in the Content Library header.
+- `ImportLibraryModal`: importing remote library items now fetches and rehydrates them as `File` objects; added select-all toggle (with slate styling) in the Media Library header.
 - Created this log under `docs/kirk-updates.md` for ongoing updates.
 
 ## How to extend this log

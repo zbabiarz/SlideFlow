@@ -5,11 +5,11 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import Dashboard from './pages/Dashboard';
-import Generator from './pages/Generator';
+import SlideBoard from './pages/SlideBoard';
 import Results from './pages/Results';
 import Profile from './pages/Profile';
 import Billing from './pages/Billing';
-import ContentLibrary from './pages/ContentLibrary';
+import MediaLibrary from './pages/MediaLibrary';
 import { CarouselProvider } from './contexts/CarouselContext';
 import { ContentLibraryProvider } from './contexts/ContentLibraryContext';
 
@@ -18,8 +18,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen bg-ink flex items-center justify-center text-vanilla">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pacific"></div>
       </div>
     );
   }
@@ -33,9 +33,9 @@ function App() {
       <ContentLibraryProvider>
         <CarouselProvider>
           <Router>
-            <div className="min-h-screen bg-gray-50">
+            <div className="min-h-screen bg-ink text-vanilla">
               <Routes>
-                <Route path="/" element={<LandingPage />} />
+              <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignupPage />} />
                 <Route path="/dashboard" element={
@@ -43,11 +43,12 @@ function App() {
                     <Dashboard />
                   </ProtectedRoute>
                 } />
-                <Route path="/generate" element={
+                <Route path="/slideboard" element={
                   <ProtectedRoute>
-                    <Generator />
+                    <SlideBoard />
                   </ProtectedRoute>
                 } />
+                <Route path="/generate" element={<Navigate to="/slideboard" replace />} />
                 <Route path="/results" element={
                   <ProtectedRoute>
                     <Results />
@@ -63,11 +64,12 @@ function App() {
                     <Billing />
                   </ProtectedRoute>
                 } />
-                <Route path="/content-library" element={
+                <Route path="/media-library" element={
                   <ProtectedRoute>
-                    <ContentLibrary />
+                    <MediaLibrary />
                   </ProtectedRoute>
                 } />
+                <Route path="/content-library" element={<Navigate to="/media-library" replace />} />
               </Routes>
             </div>
           </Router>

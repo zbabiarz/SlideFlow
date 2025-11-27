@@ -62,18 +62,18 @@ export default function ImportLibraryModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-surface rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-charcoal/50">
+        <div className="flex items-center justify-between p-6 border-b border-charcoal/50">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Import from Library</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-xl font-semibold text-vanilla">Import from Library</h2>
+            <p className="text-sm text-vanilla/70">
               Select up to {availableSlots} images from your library ({selectedImages.size} selected)
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-surface-alt rounded-lg transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -82,9 +82,9 @@ export default function ImportLibraryModal({
         <div className="p-6 overflow-y-auto max-h-96">
           {images.length === 0 ? (
             <div className="text-center py-12">
-              <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No images in library</h3>
-              <p className="text-gray-600">Upload some images to your content library first.</p>
+              <ImageIcon className="h-12 w-12 text-vanilla/50 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-vanilla mb-2">No images in library</h3>
+              <p className="text-vanilla/70">Upload some images to your media library first.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -98,10 +98,10 @@ export default function ImportLibraryModal({
                     key={image.id}
                     className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                       isSelected
-                        ? 'border-indigo-500 ring-2 ring-indigo-500 ring-opacity-50'
+                        ? 'border-pacific ring-2 ring-pacific/40'
                         : isDisabled
-                        ? 'border-gray-200 opacity-50 cursor-not-allowed'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-charcoal/40 opacity-50 cursor-not-allowed'
+                        : 'border-charcoal/50 hover:border-pacific/40'
                     }`}
                     onClick={() => !isDisabled && toggleImageSelection(image.id)}
                   >
@@ -114,7 +114,7 @@ export default function ImportLibraryModal({
                     </div>
                     
                     {isSelected && (
-                      <div className="absolute top-2 right-2 bg-indigo-500 text-white rounded-full p-1">
+                      <div className="absolute top-2 right-2 bg-pacific text-white rounded-full p-1">
                         <Check className="h-3 w-3" />
                       </div>
                     )}
@@ -129,21 +129,21 @@ export default function ImportLibraryModal({
           )}
         </div>
 
-        <div className="flex items-center justify-between p-6 border-t border-gray-200">
-          <p className="text-sm text-gray-600">
+        <div className="flex items-center justify-between p-6 border-t border-charcoal/50">
+          <p className="text-sm text-vanilla/70">
             {selectedImages.size} of {availableSlots} available slots selected
           </p>
           <div className="flex space-x-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+              className="px-4 py-2 bg-surface hover:bg-surface-alt text-vanilla/80 rounded-lg font-medium transition-colors border border-charcoal/50"
             >
               Cancel
             </button>
             <button
               onClick={handleImport}
               disabled={selectedImages.size === 0 || importing}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-pacific hover:bg-pacific-deep text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {importing ? 'Importing...' : `Import ${selectedImages.size} Image${selectedImages.size !== 1 ? 's' : ''}`}
             </button>
