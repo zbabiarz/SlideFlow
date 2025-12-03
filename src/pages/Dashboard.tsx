@@ -37,6 +37,7 @@ export default function Dashboard() {
   });
   const [draggedCarouselId, setDraggedCarouselId] = React.useState<string | null>(null);
   const [dragOverDayId, setDragOverDayId] = React.useState<string | null>(null);
+  const calendarRef = React.useRef<HTMLElement>(null);
 
   const canGenerate = user && user.carouselsGenerated < user.maxCarousels;
   const planLabel = (user?.plan || 'free').toString();
@@ -105,6 +106,10 @@ export default function Dashboard() {
 
   // Calculate time saved (assuming each carousel saves ~2.5 hours of manual work)
   const timeSavedHours = user ? Math.round(user.carouselsGenerated * 2.5 * 10) / 10 : 0;
+
+  const scrollToCalendar = () => {
+    calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   // Drag and Drop Handlers
   const handleDragStart = (carouselId: string) => (e: React.DragEvent) => {
@@ -359,6 +364,13 @@ export default function Dashboard() {
                       <Palette className="h-5 w-5 mr-2" />
                       Brand Profile
                     </Link>
+                    <button
+                      onClick={scrollToCalendar}
+                      className="sf-btn-secondary"
+                    >
+                      <CalendarCheck2 className="h-5 w-5 mr-2" />
+                      Schedule Calendar
+                    </button>
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-xs text-vanilla/60">
@@ -422,7 +434,7 @@ export default function Dashboard() {
             )}
           </div>
           {/* Week overview */}
-          <section className="mb-8">
+          <section ref={calendarRef} className="mb-8">
             <div className="sf-card border border-charcoal/40 bg-surface-alt/90 p-6 shadow-soft">
               <div className="flex items-center justify-between mb-4 gap-2">
                 <div className="flex items-center gap-3">
