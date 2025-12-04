@@ -24,8 +24,8 @@ export default function Dashboard() {
   const { carousels, loading, deleteCarousel, duplicateCarousel, setCurrentCarousel, fetchCarousel, addCarousel, updateCarousel, scheduleCarousel } = useCarousel();
   const navigate = useNavigate();
   const [creatingCarousel, setCreatingCarousel] = React.useState(false);
-  const [previewSlides] = React.useState<Record<string, CarouselSlide[]>>({});
-  const [activeSlideIndex] = React.useState<Record<string, number>>({});
+  const [previewSlides, setPreviewSlides] = React.useState<Record<string, CarouselSlide[]>>({});
+  const [activeSlideIndex, setActiveSlideIndex] = React.useState<Record<string, number>>({});
   const [editingTitleId, setEditingTitleId] = React.useState<string | null>(null);
   const [titleDrafts, setTitleDrafts] = React.useState<Record<string, string>>({});
   const [currentWeekStart, setCurrentWeekStart] = React.useState(() => {
@@ -103,6 +103,103 @@ export default function Dashboard() {
   }, [calendarDays]);
 
   // Disable eager per-carousel fetch on dashboard to avoid repeated Supabase calls.
+  // Instead, fetch a lightweight preview set of slides for all carousels at once.
+  React.useEffect(() => {
+    if (!user?.id || !carousels.length) {
+      setPreviewSlides({});
+      return;
+    }
+
+    let cancelled = false;
+    const loadPreviews = async () => {
+      try {
+        const carouselIds = carousels.map((c) => c.id);
+        const { data: slideRows, error } = await supabase
+          .from('carousel_slide')
+          .select('id, carousel_id, position, media:media_id(bucket,path)')
+          .in('carousel_id', carouselIds)
+          .eq('user_id', user.id)
+          .order('position', { ascending: true });
+
+        if (error || !slideRows) {
+          if (error) {
+            console.error('Failed to load carousel slide previews:', error);
+          }
+          if (!cancelled) setPreviewSlides({});
+          return;
+        }
+
+        const typedRows = slideRows as unknown as Array<{
+          id: string;
+          carousel_id: string;
+          position: number;
+          media: { bucket: string; path: string } | null;
+        }>;
+
+        const paths = typedRows
+          .map((row) => row.media?.path)
+          .filter((p): p is string => !!p);
+
+        if (!paths.length) {
+          if (!cancelled) setPreviewSlides({});
+          return;
+        }
+
+        const { data: signedUrls, error: signedError } = await supabase.storage
+          .from('media')
+          .createSignedUrls(paths, 60 * 60);
+
+        if (signedError || !signedUrls) {
+          if (signedError) {
+            console.error('Failed to create signed URLs for carousel previews:', signedError);
+          }
+          if (!cancelled) setPreviewSlides({});
+          return;
+        }
+
+        const urlByPath = new Map<string, string>();
+        paths.forEach((path, idx) => {
+          const signed = signedUrls[idx];
+          if (signed?.signedUrl) {
+            urlByPath.set(path, signed.signedUrl);
+          }
+        });
+
+        const grouped: Record<string, CarouselSlide[]> = {};
+        typedRows.forEach((row) => {
+          const media = row.media;
+          if (!media?.path) return;
+          const image = urlByPath.get(media.path);
+          if (!image) return;
+          const carouselId = row.carousel_id;
+          if (!grouped[carouselId]) grouped[carouselId] = [];
+          grouped[carouselId].push({
+            id: row.id,
+            image,
+            caption: '',
+            position: row.position,
+            originalMedia: {
+              bucket: media.bucket,
+              path: media.path,
+            },
+            derivatives: [],
+          });
+        });
+
+        if (!cancelled) {
+          setPreviewSlides(grouped);
+        }
+      } catch (err) {
+        console.error('Unexpected error while loading dashboard previews:', err);
+        if (!cancelled) setPreviewSlides({});
+      }
+    };
+
+    void loadPreviews();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, carousels, setPreviewSlides]);
 
   // Calculate time saved (assuming each carousel saves ~2.5 hours of manual work)
   const timeSavedHours = user ? Math.round(user.carouselsGenerated * 2.5 * 10) / 10 : 0;
@@ -398,10 +495,12 @@ export default function Dashboard() {
                         aria-hidden="true"
                         className="absolute inset-0 block w-full h-full object-cover select-none pointer-events-none"
                       />
-                      <span className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-xl font-extrabold leading-tight text-white drop-shadow-sm">
-                        <span aria-hidden="true">+</span>
-                        <span>Create</span>
-                      </span>
+                      {!creatingCarousel && (
+                        <span className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-xl font-extrabold leading-tight text-white drop-shadow-sm">
+                          <span aria-hidden="true">+</span>
+                          <span>Create</span>
+                        </span>
+                      )}
                       {createButtonOverlayText && (
                         <div className="absolute inset-0 flex items-center justify-center rounded-[4px] bg-ink/60 text-xs font-semibold text-vanilla">
                           {createButtonOverlayText}

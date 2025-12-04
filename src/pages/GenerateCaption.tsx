@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useCarousel, type Carousel } from '../contexts/CarouselContext';
 import { type LibraryImage } from '../contexts/ContentLibraryContext';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import Navbar from '../components/Navbar';
 import PageDots from '../components/PageDots';
@@ -16,32 +17,141 @@ import ImportLibraryModal from '../components/ImportLibraryModal';
 const TOTAL_APP_PAGES = 5;
 const MAX_PREVIEW_SLOTS = 10;
 
+type SlideDraft =
+  | { kind: 'file'; index: number; file: File }
+  | { kind: 'existing'; index: number; bucket: string; path: string };
+
+async function persistDraftSlidesToSupabase(
+  drafts: SlideDraft[],
+  carouselId: string,
+  userId: string
+) {
+  if (!drafts.length) return;
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData.session) {
+    throw sessionError || new Error('Your session expired. Please log back in to continue.');
+  }
+
+  // Ensure Supabase client has the latest session for RLS.
+  const session = sessionData.session;
+  await supabase.auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token ?? '',
+  });
+
+  await supabase
+    .from('carousel_slide')
+    .delete()
+    .eq('carousel_id', carouselId)
+    .eq('user_id', userId);
+
+  const orderedDrafts = [...drafts].sort((a, b) => a.index - b.index);
+  const slideRows: { user_id: string; carousel_id: string; position: number; media_id: string }[] = [];
+
+  const BUCKET_NAME = 'media';
+
+  let position = 1;
+  for (const draft of orderedDrafts) {
+    let mediaId: string | null = null;
+
+    if (draft.kind === 'file') {
+      const safeName = draft.file.name.replace(/[^\w.-]/g, '_');
+      const ts = Date.now();
+      const path = `user_${userId}/${new Date().toISOString().slice(0, 10)}/${ts}_${crypto.randomUUID()}_${safeName}`;
+      const filename = path.split('/').pop() || safeName;
+
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(path, draft.file, { upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { data: mediaRow, error: mediaError } = await supabase
+        .from('media')
+        .insert({
+          user_id: userId,
+          bucket: BUCKET_NAME,
+          path,
+          filename,
+          mime_type: draft.file.type || 'application/octet-stream',
+          size_bytes: draft.file.size,
+          media_type: 'image',
+          visibility: 'private',
+          is_library: false,
+        })
+        .select('id')
+        .single();
+
+      if (mediaError || !mediaRow?.id) {
+        throw mediaError || new Error('Failed to save media for slide.');
+      }
+      mediaId = mediaRow.id;
+    } else {
+      const { data: existing, error: mediaError } = await supabase
+        .from('media')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('bucket', draft.bucket)
+        .eq('path', draft.path)
+        .single();
+
+      if (mediaError || !existing?.id) {
+        console.warn('Missing media for existing slide draft', draft);
+        continue;
+      }
+      mediaId = existing.id;
+    }
+
+    if (mediaId) {
+      slideRows.push({
+        user_id: userId,
+        carousel_id: carouselId,
+        position,
+        media_id: mediaId,
+      });
+      position += 1;
+    }
+  }
+
+  if (slideRows.length) {
+    const { error: insertError } = await supabase
+      .from('carousel_slide')
+      .upsert(slideRows, { onConflict: 'carousel_id,position' });
+    if (insertError) throw insertError;
+  }
+}
+
 export default function GenerateCaption() {
   const { currentCarousel, setCurrentCarousel, fetchCarousel, updateCarousel } = useCarousel();
+  const { user } = useAuth();
   const { carouselId } = useParams<{ carouselId: string }>();
   const location = useLocation();
-  const navState = location.state as { carousel?: Carousel; caption?: string } | null;
+  const navState = location.state as { carousel?: Carousel; caption?: string; slideDrafts?: SlideDraft[] } | null;
   const navCarousel = navState?.carousel;
   const navCaption = navState?.caption;
+  const navDrafts = navState?.slideDrafts ?? [];
   const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [manualCaption, setManualCaption] = useState('');
   const [captionPrompt, setCaptionPrompt] = useState('');
   const [orderedSlides, setOrderedSlides] = useState(currentCarousel?.slides ?? []);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!navCarousel && navDrafts.length === 0);
   const [showImportModal, setShowImportModal] = useState(false);
   const dragPreviewRef = React.useRef<HTMLDivElement | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [slidesUploading, setSlidesUploading] = useState(navDrafts.length > 0);
 
   // Use any preloaded carousel from navigation state for instant preview.
   React.useEffect(() => {
     if (navCarousel) {
       setCurrentCarousel(navCarousel);
-      setOrderedSlides(navCarousel.slides || []);
+      if (!navDrafts.length) {
+        setOrderedSlides(navCarousel.slides || []);
+      }
       setLoading(false);
     }
-  }, [navCarousel, setCurrentCarousel]);
+  }, [navCarousel, navDrafts.length, setCurrentCarousel]);
 
   React.useEffect(() => {
     if (navCaption !== undefined) {
@@ -52,6 +162,7 @@ export default function GenerateCaption() {
   // Fetch authoritative carousel by ID from Supabase
   React.useEffect(() => {
     if (!carouselId) return;
+    if (navDrafts.length > 0 && slidesUploading) return;
     let cancelled = false;
     setLoading(true);
     fetchCarousel(carouselId)
@@ -79,7 +190,31 @@ export default function GenerateCaption() {
     return () => {
       cancelled = true;
     };
-  }, [carouselId, fetchCarousel, setCurrentCarousel]);
+  }, [carouselId, fetchCarousel, setCurrentCarousel, navDrafts.length, slidesUploading]);
+
+  // If we arrived from SlideBoard with draft slides, persist them to Supabase first.
+  React.useEffect(() => {
+    if (!carouselId || !user?.id) return;
+    if (!navDrafts.length) return;
+    let cancelled = false;
+    const persist = async () => {
+      try {
+        setSlidesUploading(true);
+        await persistDraftSlidesToSupabase(navDrafts, carouselId, user.id);
+      } catch (err) {
+        console.error('Failed to save slides to Supabase from drafts', err);
+      } finally {
+        if (!cancelled) {
+          setSlidesUploading(false);
+        }
+      }
+    };
+    void persist();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carouselId, user?.id]);
 
   // Ensure each slide has a fresh signed URL; only hydrate once per load unless data looks incomplete.
   React.useEffect(() => {
@@ -87,7 +222,7 @@ export default function GenerateCaption() {
       currentCarousel?.slides?.some(
         (s) => !s.image || !s.image.startsWith('http')
       );
-    if (!currentCarousel || !currentCarousel.slides?.length || hydrated || !shouldHydrate) {
+    if (!currentCarousel || !currentCarousel.slides?.length || hydrated || !shouldHydrate || slidesUploading) {
       return;
     }
     let cancelled = false;
@@ -119,8 +254,8 @@ export default function GenerateCaption() {
           setCurrentCarousel({ ...currentCarousel, slides: nextSlides });
           setHydrated(true);
         }
-      } finally {
-        if (!cancelled) setHydrating(false);
+      } catch {
+        // Best-effort hydration; errors are logged above.
       }
     };
     hydrate();
@@ -254,23 +389,7 @@ export default function GenerateCaption() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-ink text-vanilla">
-        <Navbar />
-        <div className="pt-20 flex items-center justify-center h-screen">
-          <div className="text-center space-y-3">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pacific mx-auto"></div>
-            <h2 className="text-xl font-semibold">Loading carousel...</h2>
-            <p className="text-vanilla/60">Please wait while we load your carousel</p>
-          </div>
-        </div>
-        <PageDots total={TOTAL_APP_PAGES} active={2} />
-      </div>
-    );
-  }
-
-  if (!orderedSlides.length) {
+  if (!orderedSlides.length && !slidesUploading && !loading) {
     return (
       <div className="min-h-screen bg-ink text-vanilla">
         <Navbar />
@@ -290,7 +409,7 @@ export default function GenerateCaption() {
     );
   }
 
-  if (!currentCarousel) {
+  if (!currentCarousel && !loading && !slidesUploading) {
     return (
       <div className="min-h-screen bg-ink text-vanilla">
         <Navbar />
@@ -318,7 +437,10 @@ export default function GenerateCaption() {
     setCurrentSlide((prev) => (prev - 1 + orderedSlides.length) % orderedSlides.length);
   };
 
-  const canReview = manualCaption.trim().length > 0;
+  const totalSlides = orderedSlides.length || navDrafts.length || 0;
+  const slidesReady = !slidesUploading && !loading && orderedSlides.length > 0;
+  const hasCaption = manualCaption.trim().length > 0;
+  const canReview = slidesReady && hasCaption;
   const goToPublish = () => {
     if (!canReview || !currentCarousel) return;
     const targetId = carouselId || currentCarousel.id;
@@ -356,16 +478,25 @@ export default function GenerateCaption() {
               <div className="sf-card px-3 pt-4 pb-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-semibold">Preview</h2>
-                  <span className="sf-pill bg-surface text-vanilla/80">{currentSlide + 1} / {orderedSlides.length}</span>
+                  <span className="sf-pill bg-surface text-vanilla/80">
+                    {totalSlides > 0 ? `${currentSlide + 1} / ${totalSlides}` : '0 / 0'}
+                  </span>
                 </div>
                 
                 <div className="relative mx-auto max-w-[380px] w-full">
                   <div className="aspect-square bg-surface rounded-lg overflow-hidden border border-charcoal/50 flex items-center justify-center">
-                    <img
-                      src={orderedSlides[currentSlide]?.image}
-                      alt={`Slide ${currentSlide + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+                    {slidesUploading || loading || !orderedSlides.length ? (
+                      <div className="flex flex-col items-center justify-center w-full h-full text-xs text-vanilla/70 gap-2">
+                        <div className="h-8 w-8 border-2 border-pacific border-t-transparent rounded-full animate-spin" />
+                        <span>Loading...</span>
+                      </div>
+                    ) : (
+                      <img
+                        src={orderedSlides[currentSlide]?.image}
+                        alt={`Slide ${currentSlide + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                   {orderedSlides.length > 1 && (
                     <>
@@ -441,7 +572,9 @@ export default function GenerateCaption() {
                 <div className="absolute right-4 -top-4 z-20 flex items-center gap-3 translate-x-[8px] translate-y-[7px]">
                   {!canReview && (
                     <span className="text-xs text-vanilla/60 whitespace-nowrap">
-                      Hint: Add a caption to continue.
+                      {slidesUploading || loading || !orderedSlides.length
+                        ? 'Hint: Wait for slides to finish loading.'
+                        : 'Hint: Add a caption to continue.'}
                     </span>
                   )}
                   <div className="relative w-24 h-20 group">

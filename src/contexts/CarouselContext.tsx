@@ -137,67 +137,86 @@ export function CarouselProvider({ children }: CarouselProviderProps) {
     async (id: string, updates: { title?: string; caption?: string | null; status?: string }) => {
       if (!user) return null;
       try {
-        const session = await supabase.auth.getSession();
-        if (!session.data.session) {
-          throw new Error('Session expired');
+        // Only send columns that actually exist on the carousel table.
+        const dbUpdates: { title?: string; status?: string } = {};
+        if (typeof updates.title !== 'undefined') dbUpdates.title = updates.title;
+        if (typeof updates.status !== 'undefined') dbUpdates.status = updates.status;
+
+        if (Object.keys(dbUpdates).length > 0) {
+          const session = await supabase.auth.getSession();
+          if (!session.data.session) {
+            throw new Error('Session expired');
+          }
+
+          const sessionData = session.data.session;
+          await supabase.auth.setSession({
+            access_token: sessionData.access_token,
+            refresh_token: sessionData.refresh_token ?? '',
+          });
+
+          const { error } = await supabase
+            .from('carousel')
+            .update(dbUpdates)
+            .eq('id', id)
+            .eq('user_id', user.id);
+
+          if (error) {
+            throw error;
+          }
         }
 
-        const sessionData = session.data.session;
-        await supabase.auth.setSession({
-          access_token: sessionData.access_token,
-          refresh_token: sessionData.refresh_token ?? '',
-        });
-
-        const { data, error } = await supabase
-          .from('carousel')
-          .update(updates)
-          .eq('id', id)
-          .eq('user_id', user.id)
-          .select('*')
-          .single();
-
-        if (error || !data) {
-          throw error || new Error('Failed to update carousel');
-        }
-
+        // Update local state (including caption, which is app-only for now).
         setCarousels((prev) =>
           prev.map((carousel) =>
-            carousel.id === data.id
+            carousel.id === id
               ? {
                   ...carousel,
-                  title: data.title,
-                  caption: data.caption || carousel.caption,
-                  description: data.title,
-                  createdAt: new Date(data.created_at).toLocaleDateString(),
-                  status: data.status,
+                  title: typeof updates.title !== 'undefined' ? updates.title : carousel.title,
+                  caption:
+                    typeof updates.caption !== 'undefined' && updates.caption !== null
+                      ? updates.caption
+                      : carousel.caption,
+                  description:
+                    typeof updates.title !== 'undefined' ? updates.title : carousel.description,
+                  status: typeof updates.status !== 'undefined' ? updates.status : carousel.status,
                 }
               : carousel
           )
         );
 
-        if (currentCarousel?.id === data.id) {
+        if (currentCarousel?.id === id) {
           setCurrentCarousel((prev) => {
             if (!prev) return null;
             return {
               ...prev,
-              title: data.title,
-              caption: data.caption || prev.caption,
-              description: data.title,
-              status: data.status,
+              title: typeof updates.title !== 'undefined' ? updates.title : prev.title,
+              caption:
+                typeof updates.caption !== 'undefined' && updates.caption !== null
+                  ? updates.caption
+                  : prev.caption,
+              description:
+                typeof updates.title !== 'undefined' ? updates.title : prev.description,
+              status: typeof updates.status !== 'undefined' ? updates.status : prev.status,
             };
           });
         }
 
-        return {
-          ...data,
-          title: data.title,
-          caption: data.caption || '',
-          description: data.title,
-          slides: currentCarousel?.id === data.id ? currentCarousel.slides : [],
-          createdAt: new Date(data.created_at).toLocaleDateString(),
-          style: 'minimalist',
-          status: data.status,
-        };
+        const base = currentCarousel && currentCarousel.id === id ? currentCarousel : null;
+        if (base) {
+          return {
+            ...base,
+            title: typeof updates.title !== 'undefined' ? updates.title : base.title,
+            caption:
+              typeof updates.caption !== 'undefined' && updates.caption !== null
+                ? updates.caption
+                : base.caption,
+            description:
+              typeof updates.title !== 'undefined' ? updates.title : base.description,
+            status: typeof updates.status !== 'undefined' ? updates.status : base.status,
+          };
+        }
+
+        return null;
       } catch (error) {
         console.error('Error updating carousel:', error);
         return null;
