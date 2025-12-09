@@ -55,14 +55,8 @@ export default function Profile() {
   };
 
   const handleConnectInstagram = async () => {
-    setConnectingInstagram(true);
-    try {
-      await connectInstagram();
-    } catch (error: unknown) {
-      console.error('Failed to connect Instagram:', error);
-    } finally {
-      setConnectingInstagram(false);
-    }
+    // Disabled for now.
+    setConnectingInstagram(false);
   };
 
   if (!user) return null;
@@ -72,13 +66,13 @@ export default function Profile() {
       <Navbar />
       
       <main className="pt-20 pb-12">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
           <div>
             <h1 className="text-3xl font-bold">Profile Settings</h1>
             <p className="text-vanilla/70">Manage your account and subscription</p>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-6">
+          <div className="grid lg:grid-cols-[1.1fr_2.2fr] gap-4">
             {/* Sidebar */}
             <div className="sf-card p-6 space-y-4">
               <div className="text-center">
@@ -113,7 +107,7 @@ export default function Profile() {
             </div>
 
             {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="space-y-6">
               {/* Account Info */}
               <div className="sf-card p-6 space-y-4">
                 <h3 className="text-lg font-semibold">Account Information</h3>
@@ -164,6 +158,7 @@ export default function Profile() {
                     <input
                       type="email"
                       value={user.email}
+                      readOnly
                       className="w-full px-3 py-2 border border-charcoal/50 rounded-md bg-surface focus:ring-2 focus:ring-pacific focus:border-pacific"
                     />
                   </div>
@@ -214,7 +209,7 @@ export default function Profile() {
                   <Sparkles className="h-5 w-5 text-pacific" />
                   <h3 className="text-lg font-semibold">Upgrade to Premium</h3>
                 </div>
-                <p className="text-vanilla/70">Unlock unlimited generations, caption AI, and team collaboration.</p>
+                <p className="text-vanilla/70">Unlock more tools, faster workflows, and upcoming premium features.</p>
                 <button
                   onClick={handleUpgradeToPremium}
                   disabled={upgradingPlan}

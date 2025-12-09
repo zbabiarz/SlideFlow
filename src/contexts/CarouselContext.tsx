@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import { fetchUserCarousels, fetchCarouselWithSlides, deleteCarousel as dbDeleteCarousel } from '../lib/database';
+import { fetchUserCarousels, fetchCarouselWithSlides, deleteCarousel as dbDeleteCarousel, duplicateCarouselDeep } from '../lib/database';
 import { supabase } from '../lib/supabase';
 
 export interface CarouselSlide {
@@ -34,6 +34,7 @@ interface CarouselContextType {
   addCarousel: (carousel: Carousel) => void;
   deleteCarousel: (id: string) => void;
   duplicateCarousel: (id: string) => void;
+  duplicateCarouselDeep: (id: string) => Promise<Carousel | null>;
   refreshCarousels: () => Promise<void>;
   fetchCarousel: (id: string) => Promise<Carousel | null>;
   updateCarousel: (id: string, updates: { title?: string; caption?: string | null; status?: string }) => Promise<Carousel | null>;
@@ -137,10 +138,18 @@ export function CarouselProvider({ children }: CarouselProviderProps) {
     async (id: string, updates: { title?: string; caption?: string | null; status?: string }) => {
       if (!user) return null;
       try {
-        // Only send columns that actually exist on the carousel table.
+        // Only persist fields present in the DB (title, status). Keep caption client-side.
         const dbUpdates: { title?: string; status?: string } = {};
         if (typeof updates.title !== 'undefined') dbUpdates.title = updates.title;
         if (typeof updates.status !== 'undefined') dbUpdates.status = updates.status;
+
+        let data:
+          | {
+              id: string;
+              title: string;
+              status: string;
+            }
+          | null = null;
 
         if (Object.keys(dbUpdates).length > 0) {
           const session = await supabase.auth.getSession();
@@ -154,69 +163,90 @@ export function CarouselProvider({ children }: CarouselProviderProps) {
             refresh_token: sessionData.refresh_token ?? '',
           });
 
-          const { error } = await supabase
+          const response = await supabase
             .from('carousel')
             .update(dbUpdates)
             .eq('id', id)
-            .eq('user_id', user.id);
+            .eq('user_id', user.id)
+            .select('id, title, status')
+            .single();
 
-          if (error) {
-            throw error;
+          if (response.error) {
+            throw response.error;
+          }
+          data = response.data;
+        }
+
+        // Update local state using DB response plus any client-only fields.
+        if (data) {
+          setCarousels((prev) =>
+            prev.map((carousel) =>
+              carousel.id === id
+                ? {
+                    ...carousel,
+                    title: data.title,
+                    caption: typeof updates.caption !== 'undefined' ? updates.caption ?? '' : carousel.caption,
+                    description: data.title,
+                    status: data.status,
+                  }
+                : carousel
+            )
+          );
+
+          if (currentCarousel?.id === id) {
+            setCurrentCarousel((prev) => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                title: data.title,
+                caption: typeof updates.caption !== 'undefined' ? updates.caption ?? '' : prev.caption,
+                description: data.title,
+                status: data.status,
+              };
+            });
+          }
+
+          return {
+            id: data.id,
+            title: data.title,
+            caption: typeof updates.caption !== 'undefined' ? updates.caption ?? '' : currentCarousel?.caption ?? '',
+            description: data.title,
+            slides: currentCarousel?.slides ?? [],
+            createdAt: currentCarousel?.createdAt ?? '',
+            style: currentCarousel?.style ?? 'minimalist',
+            status: data.status,
+          } as Carousel;
+        }
+
+        // If nothing was sent to the DB, still update local caption/title if provided.
+        if (typeof updates.caption !== 'undefined' || typeof updates.title !== 'undefined' || typeof updates.status !== 'undefined') {
+          setCarousels((prev) =>
+            prev.map((carousel) =>
+              carousel.id === id
+                ? {
+                    ...carousel,
+                    title: typeof updates.title !== 'undefined' ? updates.title : carousel.title,
+                    caption: typeof updates.caption !== 'undefined' ? updates.caption ?? '' : carousel.caption,
+                    status: typeof updates.status !== 'undefined' ? updates.status : carousel.status,
+                  }
+                : carousel
+            )
+          );
+
+          if (currentCarousel?.id === id) {
+            setCurrentCarousel((prev) => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                title: typeof updates.title !== 'undefined' ? updates.title : prev.title,
+                caption: typeof updates.caption !== 'undefined' ? updates.caption ?? '' : prev.caption,
+                status: typeof updates.status !== 'undefined' ? updates.status : prev.status,
+              };
+            });
           }
         }
 
-        // Update local state (including caption, which is app-only for now).
-        setCarousels((prev) =>
-          prev.map((carousel) =>
-            carousel.id === id
-              ? {
-                  ...carousel,
-                  title: typeof updates.title !== 'undefined' ? updates.title : carousel.title,
-                  caption:
-                    typeof updates.caption !== 'undefined' && updates.caption !== null
-                      ? updates.caption
-                      : carousel.caption,
-                  description:
-                    typeof updates.title !== 'undefined' ? updates.title : carousel.description,
-                  status: typeof updates.status !== 'undefined' ? updates.status : carousel.status,
-                }
-              : carousel
-          )
-        );
-
-        if (currentCarousel?.id === id) {
-          setCurrentCarousel((prev) => {
-            if (!prev) return null;
-            return {
-              ...prev,
-              title: typeof updates.title !== 'undefined' ? updates.title : prev.title,
-              caption:
-                typeof updates.caption !== 'undefined' && updates.caption !== null
-                  ? updates.caption
-                  : prev.caption,
-              description:
-                typeof updates.title !== 'undefined' ? updates.title : prev.description,
-              status: typeof updates.status !== 'undefined' ? updates.status : prev.status,
-            };
-          });
-        }
-
-        const base = currentCarousel && currentCarousel.id === id ? currentCarousel : null;
-        if (base) {
-          return {
-            ...base,
-            title: typeof updates.title !== 'undefined' ? updates.title : base.title,
-            caption:
-              typeof updates.caption !== 'undefined' && updates.caption !== null
-                ? updates.caption
-                : base.caption,
-            description:
-              typeof updates.title !== 'undefined' ? updates.title : base.description,
-            status: typeof updates.status !== 'undefined' ? updates.status : base.status,
-          };
-        }
-
-        return null;
+        return currentCarousel;
       } catch (error) {
         console.error('Error updating carousel:', error);
         return null;
@@ -313,6 +343,30 @@ export function CarouselProvider({ children }: CarouselProviderProps) {
       throw error;
     }
   }, [user, carousels]);
+  const duplicateCarouselDeepAction = async (id: string) => {
+    if (!user) return null;
+    try {
+      const inserted = await duplicateCarouselDeep(id, user.id);
+      if (inserted?.id) {
+        const newCarousel: Carousel = {
+          id: inserted.id,
+          title: inserted.title,
+          caption: inserted.caption ?? '',
+          description: inserted.title,
+          slides: [],
+          createdAt: new Date(inserted.created_at || Date.now()).toLocaleDateString(),
+          style: 'minimalist',
+          status: inserted.status,
+        };
+        addCarousel(newCarousel);
+        return newCarousel;
+      }
+    } catch (err) {
+      console.error('Deep duplicate failed', err);
+      alert('Could not duplicate this carousel right now. Please try again.');
+    }
+    return null;
+  };
 
   const value = {
     carousels,
@@ -322,6 +376,7 @@ export function CarouselProvider({ children }: CarouselProviderProps) {
     addCarousel,
     deleteCarousel,
     duplicateCarousel,
+    duplicateCarouselDeep: duplicateCarouselDeepAction,
     refreshCarousels,
     fetchCarousel,
     updateCarousel,

@@ -54,7 +54,7 @@ export default function SlideFlowStudio() {
           </div>
         </div>
       </main>
-      <PageDots total={TOTAL_APP_PAGES} active={4} />
+      <PageDots total={TOTAL_APP_PAGES} active={5} />
     </div>
   );
 }

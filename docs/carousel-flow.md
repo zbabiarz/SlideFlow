@@ -1,63 +1,56 @@
-# Carousel Creation & Persistence Flow
+# Carousel Flow & Persistence (current contract)
 
-This document describes how a carousel is created, hydrated, and persisted across Dashboard → SlideBoard → Results.
+End-to-end reference for how carousels move through Dashboard → SlideBoard → Generate Caption → Publish.
 
 ## Overview
-- **Dashboard “Create New Carousel”**: Inserts a draft `carousel` row (no slides), adds it to local state, sets it as `currentCarousel`, and navigates to SlideBoard with the new id.
-- **SlideBoard hydration**: If a `carouselId` exists (from nav state or context) and local slides are empty, fetch `carousel_slide` + `media`, sign URLs, and populate previews/slots.
-- **Uploads on SlideBoard**: Each file upload writes to Supabase storage, inserts a `media` row (`is_library: true`), then inserts a `carousel_slide` row with position and `media_id`. Local state and `currentCarousel` are updated immediately.
-- **Reorder**: Dragging updates local order and persists positions to `carousel_slide`.
-- **Generate**: Reuses the existing `carouselId`; ensures slide rows exist and positions are persisted, then navigates to Results without creating a new carousel.
-- **Re-open from Dashboard**: Selecting a carousel fetches slides from Supabase so the storyboard is restored without a page refresh.
+- Dashboard creates an empty draft `carousel` row and navigates to SlideBoard with that id.
+- SlideBoard is **local-only**: users arrange up to 10 slides without touching Supabase.
+- Generate Caption persists slides to Supabase (uploads + `media` + `carousel_slide`), hydrates previews, and passes the carousel to Publish.
+- Publish sets status to `ready`, offers schedule-to-calendar UI, and attempts best-effort slide order upserts.
 
-## Data Model (relevant tables)
-- `carousel`: `id (uuid)`, `user_id`, `title`, `aspect (square|4x5|9x16)`, `status (draft|ready|posted)`, `caption_id`, timestamps.
-- `carousel_slide`: `id (uuid)`, `user_id`, `carousel_id`, `position (int)`, `media_id`, `type_code (nullable)`, `overlay (jsonb, nullable)`, `text (jsonb, nullable)`, timestamps.
-- `media`: `id (uuid)`, `user_id`, `bucket`, `path`, `filename`, `mime_type`, `size_bytes`, `media_type (image|video)`, `visibility`, `is_library`, plus optional metadata (width/height, codecs, etc.).
-
-## Lifecycle Details
+## Lifecycle (happy path)
 1) **Create (Dashboard)**
-   - Insert `carousel` with `status: draft`, `aspect: square`, title “Untitled Carousel”.
-   - Add to local carousel list; set `currentCarousel`; navigate to SlideBoard with `state: { carousel }`.
+   - Insert `carousel` `{ title: 'Untitled Carousel', status: 'draft', aspect: 'square' }`.
+   - Add to local list; set `currentCarousel`; navigate to SlideBoard with `state: { carousel }`.
 
-2) **Hydrate (SlideBoard load)**
-   - If `carouselId` exists and local slides are empty, call `fetchCarouselWithSlides` (Supabase):
-     - Fetch `carousel`.
-     - Fetch `carousel_slide` ordered by `position`.
-     - For each slide, fetch `media` (and optionally `media_derivative`), sign URL, map to preview.
-   - Populate:
-     - `previews` (signed URLs)
-     - `uploadedInfos` (media metadata)
-     - `slideEntries` (slideId/mediaId pairs)
-     - `currentCarousel.slides`
+2) **Arrange (SlideBoard)**
+   - Hydration: if arriving with a `carouselId` and empty slots, you may hydrate from `currentCarousel.slides` (signed URLs + metadata) for preview only.
+   - Upload/import: all slide placement stays in local arrays (`slotFiles`, `previews`, `uploadedInfos`); no Supabase writes.
+   - Reorder/remove: move-or-swap only; clearing a slot affects local state only.
+   - Next enabled when any slot has content. On click, build `slideDrafts`:
+     - `{ kind: 'file', index, file }` for local uploads.
+     - `{ kind: 'existing', index, bucket, path }` for library imports.
+   - Navigate to `/generate-caption/:carouselId` with `state: { carousel, slideDrafts }`.
 
-3) **Upload (SlideBoard)**
-   - Store file in storage (`media` bucket, user-namespaced path).
-   - Insert `media` row with `is_library: true`.
-   - Insert `carousel_slide` with `{ user_id, carousel_id, position: slotIndex+1, media_id }`.
-   - Update local previews, uploadedInfos, slideEntries, and `currentCarousel.slides`.
-   - Failed uploads mark the slot as failed; retry uses the same path.
+3) **Persist & Caption (Generate Caption)**
+   - If `slideDrafts` exist, `persistDraftSlidesToSupabase` uploads files to storage, inserts `media` rows (`is_library` set appropriately), and inserts ordered `carousel_slide` rows.
+   - Hydrates ordered slides with signed URLs for preview and drag-to-reorder within Generate Caption.
+   - Caption editing is client-side; Publish attempts to set `status` to `ready` and save title/caption (caption column missing in DB—see known issues).
 
-4) **Reorder (SlideBoard)**
-   - Local reorder updates `previews`, `uploadedInfos`, `slideEntries`.
-   - Persist by updating `position` on each `carousel_slide` row for slots with a `slideId`.
+4) **Publish**
+   - Uses nav state `{ caption, carousel, aspectRatio }`.
+   - Primary CTA arms the retro Next button and sets `status='ready'` client-side (best-effort Supabase update).
+   - Schedule mode currently UI-only; “Go to Calendar” links to the calendar page when wired.
 
-5) **Remove (SlideBoard)**
-   - Clears local slot; deletes `carousel_slide` row for that slot (if present); deletes `media` row (if path/bucket present).
+## Data Model (tables in play)
+- `carousel`: `id`, `user_id`, `title`, `aspect (square|4x5|9x16)`, `status (draft|ready|posted)`, optional `caption_id`.
+- `carousel_slide`: `id`, `user_id`, `carousel_id`, `position`, `media_id`, optional `type_code`, `overlay`, `text`.
+- `media`: `id`, `user_id`, `bucket`, `path`, `filename`, `mime_type`, `size_bytes`, `media_type`, `visibility`, `is_library`, plus optional width/height/duration/codecs.
 
-6) **Generate (SlideBoard → Results)**
-   - Do **not** create a new carousel if `carouselId` exists.
-   - Ensure every occupied slot has a `carousel_slide` row (insert missing ones) and persist positions.
-   - Navigate to Results with `state: { carouselId, carousel }`.
+## Reopen / Hydration
+- Dashboard card click fetches `carousel` + `carousel_slide` + `media` (signed URLs) and sets `currentCarousel`.
+- Returning to SlideBoard can hydrate previews/metadata from `currentCarousel.slides`, but SlideBoard still hands fresh `slideDrafts` forward and avoids Supabase writes.
+- Generate Caption re-signs URLs on load if needed; Publish consumes hydrated slides from nav/context.
 
-7) **Re-open (Dashboard → Results/SlideBoard)**
-   - Dashboard card click fetches the carousel, sets `currentCarousel`, and navigates to Results (or SlideBoard). Hydration restores slides and previews without refresh.
+## Troubleshooting Checklist
+- Blank SlideBoard after reopen: verify `carouselId` passed in nav state and `fetchCarouselWithSlides` returns signed URLs before hydration.
+- Missing images on Publish: confirm `originalMedia.bucket/path` present; re-sign URLs or fall back to `getPublicUrl` if signing fails.
+- Navigation without persistence: ensure SlideBoard built `slideDrafts` and Generate Caption ran `persistDraftSlidesToSupabase` before moving to Publish.
 
-## RLS/Permissions (assumptions)
-- Standard `user_id = auth.uid()` policies on `carousel`, `carousel_slide`, `media`.
-- Nulls allowed for `type_code`, `overlay`, `text`; `media` width/height nullable.
-
-## Future Work
-- Persist captions: tie Results caption to `media_caption` and/or `carousel.caption_id`.
-- Add batch endpoints or Supabase function for ordered updates (optional).
-- Add optimistic cache invalidation (refresh carousels after create/upload). 
+## Archived: Edge Function plan (historical)
+- Earlier iterations created carousels via an Edge Function (`create-carousel`) directly from SlideBoard uploads. Core steps:
+  - Request: `{ title, files[{ bucket:'media', path, mime_type, size_bytes }], aspect:'square', status:'draft' }` with user JWT in `Authorization: Bearer <token>`.
+  - Validate 1–10 files, correct bucket/path namespacing (`user_<uid>/...`), positive sizes.
+  - Inserts (transactional intent): create `carousel`, then for each file insert `media` (private, `media_type` from MIME) and `carousel_slide` with ordered `position`.
+  - Failure handling: if any insert fails, delete inserted `carousel_slide` → `media` → `carousel`.
+- This flow was superseded by the current local-only SlideBoard + Generate Caption persistence model.

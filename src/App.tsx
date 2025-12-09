@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import SlideBoard from './pages/SlideBoard';
 import GenerateCaption from './pages/GenerateCaption';
 import Publish from './pages/Publish';
+import CalendarPage from './pages/Calendar';
 import Profile from './pages/Profile';
 import Billing from './pages/Billing';
 import MediaLibrary from './pages/MediaLibrary';
@@ -70,6 +71,11 @@ function App() {
                 <Route path="/publish/:carouselId" element={
                   <ProtectedRoute>
                     <Publish />
+                  </ProtectedRoute>
+                } />
+                <Route path="/calendar" element={
+                  <ProtectedRoute>
+                    <CalendarPage />
                   </ProtectedRoute>
                 } />
                 <Route path="/studio" element={
