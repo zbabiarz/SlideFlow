@@ -190,3 +190,66 @@ export async function deleteCarousel(carouselId: string, userId: string) {
     throw carouselError;
   }
 }
+
+export async function duplicateCarouselDeep(sourceCarouselId: string, userId: string) {
+  const { data: sourceCarousel, error: sourceError } = await supabase
+    .from('carousel')
+    .select('id, title, aspect, status, caption')
+    .eq('id', sourceCarouselId)
+    .eq('user_id', userId)
+    .single();
+
+  if (sourceError || !sourceCarousel) {
+    throw sourceError || new Error('Source carousel not found');
+  }
+
+  const { data: sourceSlides, error: slidesError } = await supabase
+    .from('carousel_slide')
+    .select('position, media_id, type_code, overlay, text')
+    .eq('carousel_id', sourceCarouselId)
+    .eq('user_id', userId)
+    .order('position', { ascending: true });
+
+  if (slidesError) {
+    throw slidesError;
+  }
+
+  const newTitle = `${sourceCarousel.title} copy`;
+  const { data: inserted, error: insertError } = await supabase
+    .from('carousel')
+    .insert({
+      user_id: userId,
+      title: newTitle,
+      aspect: sourceCarousel.aspect,
+      status: 'draft',
+      caption: sourceCarousel.caption,
+    })
+    .select('*')
+    .single();
+
+  if (insertError || !inserted) {
+    throw insertError || new Error('Failed to duplicate carousel');
+  }
+
+  if (sourceSlides && sourceSlides.length > 0) {
+    const slidesToInsert = sourceSlides.map((slide) => ({
+      user_id: userId,
+      carousel_id: inserted.id,
+      position: slide.position,
+      media_id: slide.media_id,
+      type_code: slide.type_code,
+      overlay: slide.overlay,
+      text: slide.text,
+    }));
+
+    const { error: insertSlidesError } = await supabase
+      .from('carousel_slide')
+      .insert(slidesToInsert);
+
+    if (insertSlidesError) {
+      throw insertSlidesError;
+    }
+  }
+
+  return inserted;
+}

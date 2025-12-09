@@ -1,4 +1,4 @@
-# n8n Workflow Notes (Condensed)
+# n8n Workflows & Webhooks (Condensed)
 
 ## /all-data Carousel Workflow
 1. **Webhook Intake**: Receives Bolt payload containing `uploaded_files[]`, `carousel{title,aspect}`, etc.
@@ -38,3 +38,17 @@ Targets `/rest/v1/media` POST with `Prefer: return=representation`; must capture
 - Ensure service-role inserts finish before Bolt queries Supabase; otherwise expect empty 406 responses.
 - Keep unique checksum enforcement in mind when multi-item uploads fire; one bad row previously blocked the batch.
 - Path + filename constraints are already satisfied by the mapper shown above—do not alter without updating policies.
+
+## Webhook Catalog (Base URL: `https://sleepyseamonster.app.n8n.cloud/webhook/`)
+- **POST `/ingest`** — Notify backend that Supabase now holds a file; validates auth + dedupes; returns `{ media_id, deduped, media }`.
+- **POST `/derivatives`** — Request derivative generation `{ media_id, types[] }`; returns derivative ids + paths.
+- **POST `/captions`** — Persist user-entered caption `{ media_id, text, language, source:'user' }`; response `{ caption_id }`.
+- **POST `/captions/ai`** — Ask AI to craft caption `{ media_id, language, style }`; returns `{ caption_id, text }`.
+- **POST `/transcripts/queue`** — Queue speech-to-text `{ media_id, provider }`; response `{ transcript_id, status }`.
+- **GET `/search`** — Query media with filters + cursor pagination, e.g. `/search?orientation=vertical&from=2025-09-01&tags=promo&limit=24&cursor=`.
+- **POST `/post/<platform>`** — Submit carousel/media to Instagram (or other) with `{ media_ids[], required_derivative_types[], caption_id, account_id }`; responds `{ posting_log_id, status }`.
+- **POST `/brand_profile`** — Create/update palette, fonts, defaults per user.
+- **POST `/carousel`** — Create carousel container (`title`, `aspect`).
+- **POST `/carousel_slide`** — Attach media to carousel positions.
+- **GET `/usage_quota`** — Return `total_bytes` + `total_files` from `usage_quota`.
+- **GET `/posting_log`** — List posting attempts + statuses for audit.

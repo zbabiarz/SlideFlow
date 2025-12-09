@@ -1,30 +1,58 @@
-# Known Issues (Updated 2025-12-03)
+# Known Issues (Updated 2025-02-13)
 
-## SlideBoard persistence + carousel creation
-- SlideBoard now uploads directly to Supabase Storage/`media` with `is_library=true`, but failures surface only via alerts and per-slot “failed” state; there’s no global rollback or retry-all. If auth is missing/expired, uploads fail and slots remain empty.
-- Next Step calls the `create-carousel` Edge Function and navigates even if the function returns an error; the UX relies on the alert to stop the user. We should hard-stop navigation on function errors and surface structured messages.
-- Pending uploads block Next Step, but reordering is still allowed while slots are pending; metadata ordering could drift if we later rely on slot index for `position`.
+Legend: P1 = high, P2 = medium, P3 = low. Workarounds and next steps noted where known.
 
-## Results image hydration depends on original media
-- Results re-signs URLs only when `originalMedia.bucket/path` is present in the fetched carousel. If `fetchCarouselWithSlides` ever returns slides without those fields, images will render blank after reopening. Signed URLs expire after 1 hour; there’s no timed refresh, only the one-time hydration pass.
+## P1 (High)
 
-## Dashboard prefetch is best-effort
-- Dashboard tries to prefetch a carousel before navigation; if it fails (network/permission), it still routes to Results and relies on Results to refetch. Users see no explicit error on the dashboard card.
+- **Media Library bulk delete does nothing (UI no-op)**  
+  - The top “Delete (X)” bulk action shows no confirm dialog and removes nothing, even with selections; per-card trash still works. Attempted fixes: refreshed Supabase session before deletion, awaited `removeImage`, added deleting-state + confirm dialog, refreshed library after deletes (`MediaLibrary.tsx`, `ContentLibraryContext.tsx`). Cleared bucket/data and retested—still broken.  
+  - Next steps: instrument `handleBulkDelete` click, verify the button renders when `selectedImages.size > 0`, ensure `selectedImages` survives filters/search. Consider extracting logic into a dedicated hook/test to confirm invocation.
 
-## Media Library bulk delete no-ops
-- The top “Delete (X)” bulk action in Media Library does not execute (no confirm prompt, no removal) even when multiple items are selected. Single-item deletes via the per-card trash icon work.
-- Attempted fixes: refreshed Supabase session before deletion, awaited `removeImage`, added deleting-state + confirm dialog, and refreshed the library after deletes (`MediaLibrary.tsx`, `ContentLibraryContext.tsx`). Behavior still persists in UI.
-- Troubleshooting: cleared Supabase `media` bucket and media rows manually, restarted with a fresh bucket/data set—issue remains. Likely a UI event wiring or state selection issue preventing `handleBulkDelete` from firing.
-- Next steps: add console/log instrumentation to `handleBulkDelete` click, verify the button renders when `selectedImages.size > 0`, and ensure `selectedImages` tracks visible selections (especially after search/filter). Consider moving bulk delete logic into a dedicated hook/test to confirm it’s invoked.
+- **Media Library → SlideBoard multi-import clears slots**  
+  - Importing multiple images briefly shows them, then they disappear; single import is reliable. No instrumentation yet.  
+  - Next steps: instrument `handleImportFromLibrary` in `SlideBoard.tsx`, watch `pendingSlots/uploadedInfos/previews` during multi-import, and ensure placement isn’t immediately overwritten by hydration effects. Add a focused test to simulate multi-image import.
 
-## Media Library → SlideBoard multi-import fails
-- When importing multiple images from Media Library into SlideBoard, they briefly appear in slots then clear/disappear; only single-image import works reliably.
-- No troubleshooting done yet; root cause unknown. Hypotheses: slot placement loop or state reset in `handleImportFromLibrary`, pending-slot handling, or an effect that rehydrates slots and overwrites newly placed images.
-- Next steps: instrument `handleImportFromLibrary` in `SlideBoard.tsx`, watch `pendingSlots`, `uploadedInfos`, and `previews` changes during multi-import, and confirm the placement loop and `set*` calls aren’t immediately cleared by a subsequent effect (e.g., hydration). Add a focused test case to simulate multi-image import flow.
+- **Publish draft save fails**  
+  - Supabase update returns null/“Update failed”; slide-order upsert may miss the user id; modal errors show but no row is written.  
+  - Next steps: ensure draft save writes title/caption/status and slide order for the active carousel id with authenticated user, then navigates to Dashboard only on success; surface structured errors otherwise.
 
-## Lint debt (pre-existing, untouched)
-- Current `npm run lint -- --quiet` reports ~53 errors across the repo:  
-  - **Unused imports/vars**: `src/App.tsx` (`useState`, `useEffect`), `src/pages/MediaLibrary.tsx` (`Filter`, `clearLibrary`, `ext`), `src/pages/Billing.tsx` (`DollarSign`), `src/pages/Profile.tsx` (`err`), `src/pages/LoginPage.tsx`/`SignupPage.tsx` (`err`), `src/pages/CreateCarousel.tsx` (`ext`), `src/pages/LandingPage.tsx` (`ArrowRight`, `useCases`, `features`), `src/pages/SlideBoard.tsx` (`ASPECT`, `captionPrompt`, `ext`, `handlePromptChange`), etc.
-  - **`any` usages**: `src/contexts/CarouselContext.tsx`, `src/lib/database.ts`, `src/lib/n8n.ts`, `src/lib/stripe.ts`, `src/lib/instagram.ts`, `supabase/functions/n8n-proxy/index.ts`, `src/pages/CreateCarousel.tsx`, `src/pages/SlideBoard.tsx` (create-carousel invoke), `src/pages/Results.tsx` (location state).
-  - **Regex/escape issues**: `src/pages/CreateCarousel.tsx` has an unnecessary escape in the filename sanitizer; similar rule in `src/pages/MediaLibrary.tsx`.
-  - These errors predate today’s changes; no fixes applied yet. A cleanup pass is required to get lint green.
+- **Publish page blank after draft failure**  
+  - After a failed draft save, the Publish page can render white/blank.  
+  - Next steps: guard all Supabase calls, keep rendering even on errors, and show surfaced errors instead of throwing.
+
+- **Caption not persisted (missing DB column)**  
+  - `carousel` table lacks a `caption` column; Publish/`updateCarousel` only write title/status. Caption edits stay client-side and are lost on reload.  
+  - Workaround: copy/paste caption elsewhere before reload.  
+  - Next steps: add a caption column (or equivalent) and wire server/client updates.
+
+- **Calendar scheduled time mismatch**  
+  - Scheduled time shown on calendar tiles can differ from modal selection (e.g., select 6:00 PM, tile shows 1:00 AM / 5-hour offset). Suspected local→UTC conversion (`toUtcISOString`) combined with display timezone formatting.  
+  - Workaround: verify tile time after scheduling; rescheduling works but may show shifted time.  
+  - Next steps: enforce a single conversion path (local → UTC) and consistent render path (UTC → local) using the same IANA timezone.
+
+## P2 (Medium)
+
+- **Results image hydration depends on `originalMedia`**  
+  - Re-signs URLs only when `originalMedia.bucket/path` is present; missing fields yield blank images after reopening. Signed URLs expire after ~1 hour; no timed refresh, only one-time hydration.
+
+- **Dashboard duplicate action fails**  
+  - Clicking “Duplicate” can alert “Could not duplicate this carousel right now. Please try again.” Likely Supabase insert/permissions or missing schema support during deep copy.  
+  - Workaround: manually create a new carousel and copy content until fixed.
+
+- **Lint debt (~53 errors)**  
+  - `npm run lint -- --quiet` reports unused imports/vars, `any` usage, and regex escape issues. Examples:  
+    - Unused imports/vars: `src/App.tsx` (`useState`, `useEffect`), `src/pages/MediaLibrary.tsx` (`Filter`, `clearLibrary`, `ext`), `src/pages/Billing.tsx` (`DollarSign`), `src/pages/Profile.tsx` (`err`), `src/pages/LoginPage.tsx`/`SignupPage.tsx` (`err`), `src/pages/CreateCarousel.tsx` (`ext`), `src/pages/LandingPage.tsx` (`ArrowRight`, `useCases`, `features`), `src/pages/SlideBoard.tsx` (`ASPECT`, `captionPrompt`, `ext`, `handlePromptChange`), etc.  
+    - `any` usage: `src/contexts/CarouselContext.tsx`, `src/lib/database.ts`, `src/lib/n8n.ts`, `src/lib/stripe.ts`, `src/lib/instagram.ts`, `supabase/functions/n8n-proxy/index.ts`, `src/pages/CreateCarousel.tsx`, `src/pages/SlideBoard.tsx` (create-carousel invoke), `src/pages/Results.tsx` (location state).  
+    - Regex/escape issues: unnecessary escape in filename sanitizer (`src/pages/CreateCarousel.tsx`, similar in `src/pages/MediaLibrary.tsx`).  
+  - These errors predate current changes; needs a cleanup pass.
+
+## P3 (Low)
+
+- **Dashboard prefetch is best-effort**  
+  - Dashboard routes to Results even if prefetch fails (network/permission); users see no error. Needs visible error handling or retry before routing.
+
+## Resolved / Historical
+
+- **SlideBoard persistence + carousel creation**  
+  - Issue: SlideBoard uploaded directly to Supabase with `is_library=true`; failures surfaced per-slot; Next called `create-carousel` even on errors; pending uploads allowed reorder, risking drift.  
+  - Resolution: SlideBoard is now local-only; all persistence (`media` + `carousel_slide`) moved to Generate Caption via `slideDrafts`; Next reuses the existing carousel id. Global writes no longer occur from SlideBoard.

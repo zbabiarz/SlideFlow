@@ -5,9 +5,9 @@ import {
   SwatchBook, 
   Palette, 
   Type, 
-  Sparkles, 
   Info, 
   Check,
+  Sparkles,
   ArrowLeft
 } from 'lucide-react';
 
@@ -52,10 +52,8 @@ const defaultPalette = {
 export default function BrandProfile() {
   const [selectedStyle, setSelectedStyle] = useState<(typeof styleOptions)[number]['value']>('minimalist');
   const [palette, setPalette] = useState(defaultPalette);
-  const [fonts, setFonts] = useState({
-    primary: fontOptions[0],
-    secondary: fontOptions[1],
-  });
+  const [primaryFont, setPrimaryFont] = useState(fontOptions[0]);
+  const previewFontFamily = `${primaryFont}, sans-serif`;
 
   const formatLabel = (key: string) => {
     if (key.startsWith('accent')) {
@@ -82,10 +80,6 @@ export default function BrandProfile() {
             <p className="text-vanilla/70 max-w-3xl">
               Save your go-to style, colors, and fonts once. SlideFlow will reuse them across new carousels and captions.
             </p>
-            <div className="inline-flex items-center gap-2 text-sm text-vanilla/70 bg-surface rounded-lg border border-charcoal/50 px-4 py-2">
-              <Sparkles className="h-4 w-4 text-pacific" />
-              <span>Preset saving is next up—these controls are ready for wiring to Supabase.</span>
-            </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3">
@@ -126,18 +120,18 @@ export default function BrandProfile() {
               <div className="flex items-start gap-3">
                 <Info className="h-5 w-5 text-pacific mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-semibold text-vanilla">Preset save/apply coming soon</p>
+                  <p className="font-semibold text-vanilla">Save this preset to your account</p>
                   <p className="text-sm text-vanilla/70">
-                    This page centralizes brand defaults per the plan doc. Supabase + context wiring will land in the next task.
+                    Style, palette, and font will be saved to your brand profile when preset saving is available.
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                className="sf-btn-secondary w-full justify-center opacity-70 cursor-not-allowed"
+                className="sf-btn-primary w-full justify-center opacity-80 cursor-not-allowed"
                 disabled
               >
-                Save preset
+                Save preset (coming soon)
               </button>
             </div>
           </div>
@@ -179,9 +173,6 @@ export default function BrandProfile() {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-vanilla/60">
-                Palette controls mirror the plan doc. Persisting values to Supabase will be wired when the store is ready.
-              </p>
             </div>
 
             <div className="sf-card p-6 space-y-4">
@@ -196,9 +187,10 @@ export default function BrandProfile() {
                 <div className="space-y-2">
                   <label className="text-sm text-vanilla/80 block">Primary font</label>
                   <select
-                    value={fonts.primary}
-                    onChange={(e) => setFonts((prev) => ({ ...prev, primary: e.target.value }))}
+                    value={primaryFont}
+                    onChange={(e) => setPrimaryFont(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-charcoal/60 bg-surface focus:border-pacific focus:ring-2 focus:ring-pacific/60"
+                    style={{ fontFamily: previewFontFamily }}
                   >
                     {fontOptions.map((font) => (
                       <option key={font} value={font}>
@@ -207,27 +199,16 @@ export default function BrandProfile() {
                     ))}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-vanilla/80 block">Secondary font</label>
-                  <select
-                    value={fonts.secondary}
-                    onChange={(e) => setFonts((prev) => ({ ...prev, secondary: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border border-charcoal/60 bg-surface focus:border-pacific focus:ring-2 focus:ring-pacific/60"
-                  >
-                    {fontOptions.map((font) => (
-                      <option key={font} value={font}>
-                        {font}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="p-4 rounded-xl border border-charcoal/50 bg-surface-alt space-y-1.5">
+                <div
+                  className="p-4 rounded-xl border border-charcoal/50 bg-surface-alt space-y-1.5"
+                  style={{ fontFamily: previewFontFamily }}
+                >
                   <p className="text-xs uppercase text-vanilla/60 tracking-[0.2em]">Preview</p>
-                  <p className="text-lg font-semibold" style={{ fontFamily: fonts.primary }}>
-                    Headline in {fonts.primary}
+                  <p className="text-lg font-semibold">
+                    Consistent brand text
                   </p>
-                  <p className="text-sm text-vanilla/80" style={{ fontFamily: fonts.secondary }}>
-                    Body text in {fonts.secondary}. Selections stay local until persistence is implemented.
+                  <p className="text-sm text-vanilla/80">
+                    The quick brown fox jumps over the lazy dog.
                   </p>
                 </div>
               </div>
@@ -240,14 +221,13 @@ export default function BrandProfile() {
               <div>
                 <h2 className="text-xl font-semibold text-vanilla">Presets</h2>
                 <p className="text-vanilla/70">
-                  Create, apply, and manage presets here once the storage layer is wired up.
+                  Create, apply, and manage presets here once preset saving is turned on.
                 </p>
               </div>
             </div>
             <div className="bg-surface rounded-lg border border-charcoal/50 p-4 text-sm text-vanilla/75">
               <p>
-                Preset lists, apply, and delete controls will live here. Hook this section to Supabase and the brand
-                profile store when you tackle the remaining Brand Profile tasks.
+                Preset lists, apply, and delete controls will live here when preset management is enabled.
               </p>
             </div>
           </div>

@@ -9,23 +9,37 @@ import {
   Copy, 
   Trash2, 
   Download, 
-  CalendarCheck2,
+  CalendarDays,
   TrendingUp,
   Star,
   Clock,
   Image as ImageIcon,
+  FolderOpen,
   Palette,
+  Sparkles,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Send
 } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { carousels, loading, deleteCarousel, duplicateCarousel, setCurrentCarousel, fetchCarousel, addCarousel, updateCarousel, scheduleCarousel } = useCarousel();
+  const {
+    carousels,
+    loading,
+    deleteCarousel,
+    duplicateCarousel,
+    duplicateCarouselDeep,
+    setCurrentCarousel,
+    fetchCarousel,
+    addCarousel,
+    updateCarousel,
+    scheduleCarousel,
+  } = useCarousel();
   const navigate = useNavigate();
   const [creatingCarousel, setCreatingCarousel] = React.useState(false);
-  const [previewSlides] = React.useState<Record<string, CarouselSlide[]>>({});
-  const [activeSlideIndex] = React.useState<Record<string, number>>({});
+  const [previewSlides, setPreviewSlides] = React.useState<Record<string, CarouselSlide[]>>({});
+  const [activeSlideIndex, setActiveSlideIndex] = React.useState<Record<string, number>>({});
   const [editingTitleId, setEditingTitleId] = React.useState<string | null>(null);
   const [titleDrafts, setTitleDrafts] = React.useState<Record<string, string>>({});
   const [currentWeekStart, setCurrentWeekStart] = React.useState(() => {
@@ -103,13 +117,106 @@ export default function Dashboard() {
   }, [calendarDays]);
 
   // Disable eager per-carousel fetch on dashboard to avoid repeated Supabase calls.
+  // Instead, fetch a lightweight preview set of slides for all carousels at once.
+  React.useEffect(() => {
+    if (!user?.id || !carousels.length) {
+      setPreviewSlides({});
+      return;
+    }
+
+    let cancelled = false;
+    const loadPreviews = async () => {
+      try {
+        const carouselIds = carousels.map((c) => c.id);
+        const { data: slideRows, error } = await supabase
+          .from('carousel_slide')
+          .select('id, carousel_id, position, media:media_id(bucket,path)')
+          .in('carousel_id', carouselIds)
+          .eq('user_id', user.id)
+          .order('position', { ascending: true });
+
+        if (error || !slideRows) {
+          if (error) {
+            console.error('Failed to load carousel slide previews:', error);
+          }
+          if (!cancelled) setPreviewSlides({});
+          return;
+        }
+
+        const typedRows = slideRows as unknown as Array<{
+          id: string;
+          carousel_id: string;
+          position: number;
+          media: { bucket: string; path: string } | null;
+        }>;
+
+        const paths = typedRows
+          .map((row) => row.media?.path)
+          .filter((p): p is string => !!p);
+
+        if (!paths.length) {
+          if (!cancelled) setPreviewSlides({});
+          return;
+        }
+
+        const { data: signedUrls, error: signedError } = await supabase.storage
+          .from('media')
+          .createSignedUrls(paths, 60 * 60);
+
+        if (signedError || !signedUrls) {
+          if (signedError) {
+            console.error('Failed to create signed URLs for carousel previews:', signedError);
+          }
+          if (!cancelled) setPreviewSlides({});
+          return;
+        }
+
+        const urlByPath = new Map<string, string>();
+        paths.forEach((path, idx) => {
+          const signed = signedUrls[idx];
+          if (signed?.signedUrl) {
+            urlByPath.set(path, signed.signedUrl);
+          }
+        });
+
+        const grouped: Record<string, CarouselSlide[]> = {};
+        typedRows.forEach((row) => {
+          const media = row.media;
+          if (!media?.path) return;
+          const image = urlByPath.get(media.path);
+          if (!image) return;
+          const carouselId = row.carousel_id;
+          if (!grouped[carouselId]) grouped[carouselId] = [];
+          grouped[carouselId].push({
+            id: row.id,
+            image,
+            caption: '',
+            position: row.position,
+            originalMedia: {
+              bucket: media.bucket,
+              path: media.path,
+            },
+            derivatives: [],
+          });
+        });
+
+        if (!cancelled) {
+          setPreviewSlides(grouped);
+        }
+      } catch (err) {
+        console.error('Unexpected error while loading dashboard previews:', err);
+        if (!cancelled) setPreviewSlides({});
+      }
+    };
+
+    void loadPreviews();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, carousels, setPreviewSlides]);
 
   // Calculate time saved (assuming each carousel saves ~2.5 hours of manual work)
   const timeSavedHours = user ? Math.round(user.carouselsGenerated * 2.5 * 10) / 10 : 0;
-
-  const scrollToCalendar = () => {
-    calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
 
   // Drag and Drop Handlers
   const handleDragStart = (carouselId: string) => (e: React.DragEvent) => {
@@ -262,7 +369,7 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-ink">
         <Navbar />
-        <main className="pt-20 pb-12">
+        <main className="pt-24 pb-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-tropical"></div>
@@ -277,12 +384,14 @@ export default function Dashboard() {
     ? '/Deactivated%20Next%20Button.png'
     : '/Next%20Button.png';
   const createButtonOverlayText = creatingCarousel ? 'Creating…' : null;
+  const dashboardActionBtn =
+    'sf-btn-secondary inline-flex items-center gap-2 justify-center min-w-[180px] px-4 py-4 h-[60px] text-base md:text-lg font-semibold transition-all';
 
   return (
     <div className="min-h-screen bg-ink">
       <Navbar />
       
-      <main className="pt-20 pb-12">
+      <main className="pt-24 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mb-8">
@@ -311,7 +420,7 @@ export default function Dashboard() {
             <div className="sf-card p-6">
               <div className="flex items-center">
                 <div className="p-3 rounded-lg bg-tropical/15 text-tropical">
-                  <CalendarCheck2 className="h-6 w-6" />
+                  <CalendarDays className="h-6 w-6" />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm text-vanilla/70">This Month</p>
@@ -351,77 +460,86 @@ export default function Dashboard() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <Link
-                      to="/media-library"
-                      className="sf-btn-secondary"
+                      to="/brand-profile"
+                      className={`${dashboardActionBtn} bg-[#2e2b28] border-[#525250] text-vanilla hover:bg-[#2f7f90] hover:border-[#2f7f90] hover:text-vanilla hover:shadow-[0_10px_28px_rgba(0,0,0,0.22)]`}
                     >
-                      <ImageIcon className="h-5 w-5 mr-2" />
+                      <Palette className="h-5 w-5" />
+                      Brand Profile
+                    </Link>
+                    <Link
+                      to="/media-library"
+                      className={`${dashboardActionBtn} bg-[#2e2b28] border-[#525250] text-vanilla hover:bg-[#2f7f90] hover:border-[#2f7f90] hover:text-vanilla hover:shadow-[0_10px_28px_rgba(0,0,0,0.22)]`}
+                    >
+                      <FolderOpen className="h-5 w-5" />
                       Media Library
                     </Link>
                     <Link
-                      to="/brand-profile"
-                      className="sf-btn-secondary"
+                      to="/calendar"
+                      className={`${dashboardActionBtn} bg-[#2e2b28] border-[#525250] text-vanilla hover:bg-[#2f7f90] hover:border-[#2f7f90] hover:text-vanilla hover:shadow-[0_10px_28px_rgba(0,0,0,0.22)] text-center`}
                     >
-                      <Palette className="h-5 w-5 mr-2" />
-                      Brand Profile
+                      <CalendarDays className="h-5 w-5" />
+                      Calendar
                     </Link>
-                    <button
-                      onClick={scrollToCalendar}
-                      className="sf-btn-secondary"
+                    <Link
+                      to="/studio"
+                      className={`${dashboardActionBtn} bg-[#40a0b2] border-[#40a0b2] text-vanilla shadow-soft hover:bg-[#4bb7c9] hover:border-[#4bb7c9] hover:text-vanilla hover:shadow-[0_14px_40px_rgba(64,160,178,0.35)] text-center ml-3 md:ml-6 min-w-[210px] px-5 h-[64px] text-lg hover:-translate-y-1 transition-transform duration-200 ease-out`}
                     >
-                      <CalendarCheck2 className="h-5 w-5 mr-2" />
-                      Schedule Calendar
-                    </button>
+                      <Sparkles className="h-5 w-5" />
+                      SlideFlow Studio
+                    </Link>
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-xs text-vanilla/60">
                       Hint: Click to create a new carousel.
                     </span>
                     <div className="relative w-24 h-20 group">
-                    <div
-                      className="absolute inset-0 z-0 rounded-[4px] bg-[#0c0c0c] pointer-events-none"
-                      aria-hidden="true"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCreateNewCarousel}
-                      disabled={creatingCarousel}
-                      className={`group relative z-10 flex items-center justify-center rounded-[4px] w-full h-full overflow-hidden border transition-transform duration-200 ease-out transform-gpu ${
-                        creatingCarousel
-                          ? 'bg-surface opacity-70 border-charcoal/50 cursor-not-allowed pointer-events-none shadow-none'
-                          : 'border-transparent shadow-lg shadow-pacific/30 hover:shadow-pacific/50 group-hover:translate-x-1'
-                      }`}
-                      aria-label="Create a new carousel"
-                    >
-                      <img
-                        src={createButtonImageSrc}
-                        alt=""
+                      <div
+                        className="absolute inset-0 z-0 rounded-[4px] bg-[#0c0c0c] pointer-events-none"
                         aria-hidden="true"
-                        className="absolute inset-0 block w-full h-full object-cover select-none pointer-events-none"
                       />
-                      <span className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-xl font-extrabold leading-tight text-white drop-shadow-sm">
+                      <button
+                        type="button"
+                        onClick={handleCreateNewCarousel}
+                        disabled={creatingCarousel}
+                        className={`group relative z-10 flex items-center justify-center rounded-[4px] w-full h-full overflow-hidden border transition-transform duration-200 ease-out transform-gpu ${
+                          creatingCarousel
+                            ? 'bg-surface opacity-70 border-charcoal/50 cursor-not-allowed pointer-events-none shadow-none'
+                            : 'border-transparent shadow-lg shadow-pacific/30 hover:shadow-pacific/50 group-hover:translate-x-1'
+                        }`}
+                        aria-label="Create a new carousel"
+                      >
+                        <img
+                          src={createButtonImageSrc}
+                          alt=""
+                          aria-hidden="true"
+                      className="absolute inset-0 block w-full h-full object-cover select-none pointer-events-none"
+                    />
+                    {!creatingCarousel && (
+                      <span className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-xl font-extrabold leading-tight text-vanilla drop-shadow-sm">
                         <span aria-hidden="true">+</span>
                         <span>Create</span>
                       </span>
-                      {createButtonOverlayText && (
-                        <div className="absolute inset-0 flex items-center justify-center rounded-[4px] bg-ink/60 text-xs font-semibold text-vanilla">
-                          {createButtonOverlayText}
-                        </div>
-                      )}
-                      <span className="sr-only">
-                        {creatingCarousel ? 'Creating a new carousel' : 'Create a new carousel'}
-                      </span>
-                    </button>
+                    )}
+                        {createButtonOverlayText && (
+                          <div className="absolute inset-0 flex items-center justify-center rounded-[4px] bg-ink/60 text-xs font-semibold text-vanilla">
+                            {createButtonOverlayText}
+                          </div>
+                        )}
+                        <span className="sr-only">
+                          {creatingCarousel ? 'Creating a new carousel' : 'Create a new carousel'}
+                        </span>
+                      </button>
+                    </div>
+                    <img
+                      src="/blue_arrow.png"
+                      alt=""
+                      aria-hidden="true"
+                      className={`w-4 h-auto sf-arrow-wiggle select-none pointer-events-none transition-opacity duration-150 ${
+                        creatingCarousel ? 'opacity-40' : 'opacity-100'
+                      }`}
+                    />
                   </div>
-                  <img
-                    src="/blue_arrow.png"
-                    alt=""
-                    aria-hidden="true"
-                    className={`w-4 h-auto sf-arrow-wiggle select-none pointer-events-none transition-opacity duration-150 ${
-                      creatingCarousel ? 'opacity-40' : 'opacity-100'
-                    }`}
-                  />
                 </div>
-              </div>
             ) : (
               <div className="bg-tropical/10 border border-tropical/30 rounded-lg p-4 md:max-w-md">
                 <p className="text-vanilla font-medium">
@@ -531,7 +649,7 @@ export default function Dashboard() {
                 draggable
                 onDragStart={handleDragStart(carousel.id)}
                 onDragEnd={handleDragEnd}
-                className={`sf-card overflow-hidden transition-all text-sm w-full max-w-[14rem] ${
+                className={`sf-card overflow-hidden transition-all text-sm w-full max-w-[14rem] group ${
                   isDragging
                     ? 'opacity-50 cursor-grabbing scale-95'
                     : 'hover:-translate-y-0.5 cursor-grab active:cursor-grabbing'
@@ -587,6 +705,17 @@ export default function Dashboard() {
                       </div>
                     </>
                   )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteCarousel(carousel.id);
+                    }}
+                    className="absolute top-2 right-2 hidden group-hover:flex items-center justify-center h-8 w-8 rounded-full bg-ink/80 text-vanilla/80 border border-charcoal/60 hover:text-vanilla hover:bg-ink/95 transition-colors"
+                    aria-label="Delete carousel"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
                 
                 <div className="p-4">
@@ -614,7 +743,15 @@ export default function Dashboard() {
                   <p className="text-vanilla/80 text-xs mb-3 line-clamp-2">{carousel.caption || carousel.description}</p>
 
                   <div className="flex items-center justify-between text-xs text-vanilla/70 mb-3">
-                    <span className="px-2 py-1 rounded-full bg-surface text-vanilla/80 border border-charcoal/40 capitalize">
+                    <span
+                      className={`px-2 py-1 rounded-full border capitalize ${
+                        (carousel.status || '').toLowerCase() === 'scheduled'
+                          ? 'bg-pacific/15 text-pacific border-pacific/60'
+                          : (carousel.status || '').toLowerCase() === 'ready'
+                            ? 'bg-[#1e8a4f]/20 text-[#1e8a4f] border-[#1e8a4f]/60'
+                            : 'bg-surface text-vanilla/80 border-charcoal/40'
+                      }`}
+                    >
                       {carousel.status || carousel.style}
                     </span>
                     <span>{carousel.createdAt}</span>
@@ -629,21 +766,18 @@ export default function Dashboard() {
                   
                   <div className="flex space-x-2 text-xs">
                     <button 
-                      onClick={() => duplicateCarousel(carousel.id)}
+                      onClick={() => duplicateCarouselDeep(carousel.id)}
                       className="flex-1 flex items-center justify-center px-2.5 py-2 bg-surface hover:bg-ink text-vanilla/80 rounded-lg border border-charcoal/40 transition-colors"
                     >
                       <Copy className="h-4 w-4 mr-1" />
-                      Copy
+                      Duplicate
                     </button>
-                    <button className="flex-1 flex items-center justify-center px-2.5 py-2 bg-stormy/15 hover:bg-stormy/25 text-stormy rounded-lg border border-stormy/30 transition-colors">
-                      <Download className="h-4 w-4 mr-1" />
-                      Export
-                    </button>
-                    <button 
-                      onClick={() => deleteCarousel(carousel.id)}
-                      className="px-2.5 py-2 bg-surface-alt/10 hover:bg-surface-alt/20 text-vanilla rounded-lg transition-colors"
+                    <button
+                      type="button"
+                      className="flex-1 flex items-center justify-center px-2.5 py-2 rounded-lg border border-pacific bg-pacific/10 text-pacific hover:bg-pacific/20 hover:text-vanilla transition-colors"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Send className="h-4 w-4 mr-1" />
+                      Publish
                     </button>
                   </div>
                 </div>

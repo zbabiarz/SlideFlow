@@ -25,6 +25,11 @@ Purpose: running, date-stamped notes for changes made locally after cloning the 
 - Publish UI: preview carousel (enlarged, square corners), caption box prefilled from Generate Caption (shorter height), destinations/timing controls, readiness block simplified to slides only, and SlideFlow Studio CTA card (now in right column footer).
 - SlideFlow Studio placeholder page updated name to “SlideFlow Studio”; minor copy/styling alignments to match current palette.
 
+## 2025-02-11
+- Publish: restyled the SlideFlow Studio card (square badge, bullet grid, accurate capabilities copy, tighter footer), set Go to Studio/Publish buttons to dark default with bright hover glow, and reduced padding on the action row.
+- Publish: refreshed Studio bullets (crop/resize presets, AI background swap/remove, on-brand overlays, export/save PNGs) and footer (“Slides and captions carry over”).
+- Generate Caption: tightened Studio card spacing, downsized tagline weight/size, moved helper + Go to Studio CTA to the right, and added a spinner overlay to the disabled Next button while slides are loading.
+
 ## How to extend this log
 - Add new sections by date (`YYYY-MM-DD`) with bullets for changes, rationale, and any follow-up/TODOs.
 - If you change collaboration workflow (branching, PR rules), append to the “Collaboration & Git hygiene” section rather than overwriting.

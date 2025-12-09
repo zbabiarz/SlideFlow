@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useContentLibrary, type UploadedFileInfo, type LibraryImage } from '../contexts/ContentLibraryContext';
+import { type UploadedFileInfo, type LibraryImage } from '../contexts/ContentLibraryContext';
 import { useCarousel, type Carousel } from '../contexts/CarouselContext';
-import { supabase } from '../lib/supabase';
 import ImportLibraryModal from '../components/ImportLibraryModal';
 import Navbar from '../components/Navbar';
 import PageDots from '../components/PageDots';
@@ -13,7 +11,6 @@ import {
   FolderOpen
 } from 'lucide-react';
 
-const BUCKET_NAME = "media";
 const MAX_FILES = 10;
 const TOTAL_APP_PAGES = 5;
 
@@ -38,23 +35,22 @@ const placeSlidesIntoSlots = <T,>(
 
 type SlotUpload = { file: File; index: number };
 
+type SlideDraft =
+  | { kind: 'file'; index: number; file: File }
+  | { kind: 'existing'; index: number; bucket: string; path: string };
+
 export default function SlideBoard() {
   const [slotFiles, setSlotFiles] = useState<Array<File | undefined>>(Array(MAX_FILES).fill(undefined));
   const [previews, setPreviews] = useState<Array<string | undefined>>(Array(MAX_FILES).fill(undefined));
-  const [slideEntries, setSlideEntries] = useState<Array<{ slideId?: string; mediaId?: string } | undefined>>(Array(MAX_FILES).fill(undefined));
-  const [uploading, setUploading] = useState(false);
   const [uploadedInfos, setUploadedInfos] = useState<Array<UploadedFileInfo | undefined>>(Array(MAX_FILES).fill(undefined));
-  const [creating, setCreating] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; alt: string } | null>(null);
-  const [pendingSlots, setPendingSlots] = useState<Set<number>>(new Set());
-  const [failedSlots, setFailedSlots] = useState<Record<number, string>>({});
+  const dropzoneFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const slotFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const slotTargetRef = React.useRef<number | null>(null);
+  const dragPreviewRef = React.useRef<HTMLDivElement | null>(null);
   
-  const { user } = useAuth();
-  const { addUploadedFiles } = useContentLibrary();
-  const { currentCarousel, setCurrentCarousel, addCarousel } = useCarousel();
+  const { currentCarousel, setCurrentCarousel } = useCarousel();
   const navigate = useNavigate();
   const location = useLocation();
   const navState = location.state as { carousel?: Carousel } | null;
@@ -65,29 +61,6 @@ export default function SlideBoard() {
     if (url && url.startsWith('blob:')) {
       URL.revokeObjectURL(url);
     }
-  };
-
-  const uploadOne = async (userId: string, file: File) => {
-    const safeName = file.name.replace(/[^\w.-]/g, '_');
-    const ts = Date.now();
-    const path = `user_${userId}/${new Date().toISOString().slice(0,10)}/${ts}_${crypto.randomUUID()}_${safeName}`;
-    const filename = path.split('/').pop() || safeName;
-
-    const { error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(path, file, { upsert: false });
-
-    if (error) throw error;
-
-    return {
-      bucket: BUCKET_NAME,
-      path,
-      filename,
-      mime_type: file.type || 'application/octet-stream',
-      size_bytes: file.size,
-      created_at: new Date().toISOString(),
-      is_library: true,
-    } as UploadedFileInfo;
   };
 
   const setPreviewAt = (index: number, url: string | undefined) => {
@@ -115,92 +88,58 @@ export default function SlideBoard() {
     });
   };
 
-  const persistFileToSupabase = async (file: File, index: number) => {
-    if (!user) {
-      throw new Error('Please log in to upload images.');
-    }
-    const session = await supabase.auth.getSession();
-    if (!session.data.session) {
-      throw new Error('Your session expired. Please log back in to upload.');
-    }
-    const sessionData = session.data.session;
-    try {
-      await supabase.auth.setSession({
-        access_token: sessionData.access_token,
-        refresh_token: sessionData.refresh_token ?? "",
-      });
-    } catch (e) {
-      console.error('Failed to set session on supabase client:', e);
-    }
-
-    const uploadedInfo = await uploadOne(user.id, file);
-    const row = {
-      user_id: user.id,
-      bucket: uploadedInfo.bucket,
-      path: uploadedInfo.path,
-      filename: uploadedInfo.filename || uploadedInfo.path.split('/').pop() || 'file',
-      mime_type: uploadedInfo.mime_type || 'application/octet-stream',
-      size_bytes: uploadedInfo.size_bytes || 0,
-      media_type: 'image',
-      visibility: 'private',
-      is_library: true,
-    };
-    const { data: mediaInsert, error } = await supabase
-      .from('media')
-      .insert(row)
-      .select('id,bucket,path,filename,mime_type,size_bytes')
-      .single();
-    if (error || !mediaInsert) throw error || new Error('Failed to insert media');
-
-    await addUploadedFiles([{ ...uploadedInfo, is_library: true }]);
-    const savedInfo = { ...uploadedInfo, is_library: true, id: mediaInsert.id };
-    setUploadedInfoAt(index, savedInfo);
-    return savedInfo;
-  };
-
-  const uploadSlot = async (index: number) => {
-    const file = slotFiles[index];
-    if (!file || pendingSlots.has(index)) return;
-    setPendingSlots((prev) => new Set(prev).add(index));
-    setFailedSlots((prev) => {
-      const copy = { ...prev };
-      delete copy[index];
-      return copy;
-    });
-    setUploading(true);
-    try {
-      const info = await persistFileToSupabase(file, index);
-      setUploadedInfoAt(index, info);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Upload failed';
-      setFailedSlots((prev) => ({ ...prev, [index]: message }));
-    } finally {
-      setPendingSlots((prev) => {
-        const next = new Set(prev);
-        next.delete(index);
-        setUploading(next.size > 0);
-        return next;
-      });
+  const clearDragPreview = () => {
+    if (dragPreviewRef.current) {
+      dragPreviewRef.current.remove();
+      dragPreviewRef.current = null;
     }
   };
 
-  const uploadAllMissing = async () => {
-    const indices: number[] = [];
-    for (let i = 0; i < MAX_FILES; i++) {
-      if (slotFiles[i] && !uploadedInfos[i]) {
-        indices.push(i);
-      }
-    }
-    if (!indices.length) return;
-    setUploading(true);
-    for (const idx of indices) {
-      await uploadSlot(idx);
-    }
-    setUploading(false);
-  };
+  const createDragPreview = (
+    imageUrl: string | undefined,
+    index: number,
+    width: number,
+    height: number
+  ) => {
+    clearDragPreview();
 
-  const retryUpload = async (index: number) => {
-    await uploadSlot(index);
+    const ghost = document.createElement('div');
+    ghost.style.position = 'absolute';
+    ghost.style.pointerEvents = 'none';
+    ghost.style.top = '-9999px';
+    ghost.style.left = '-9999px';
+    ghost.style.width = `${width}px`;
+    ghost.style.height = `${height}px`;
+    ghost.style.borderRadius = '10px';
+    ghost.style.overflow = 'hidden';
+    ghost.style.border = '2px solid rgba(64,160,178,0.75)';
+    ghost.style.boxShadow = '0 10px 28px rgba(0,0,0,0.35)';
+    ghost.style.backgroundColor = '#242321';
+    ghost.style.backgroundImage = imageUrl ? `url(${imageUrl})` : '';
+    ghost.style.backgroundSize = 'cover';
+    ghost.style.backgroundPosition = 'center';
+
+    const badge = document.createElement('div');
+    badge.textContent = String(index + 1);
+    badge.style.position = 'absolute';
+    badge.style.top = '6px';
+    badge.style.left = '6px';
+    badge.style.width = '26px';
+    badge.style.height = '26px';
+    badge.style.borderRadius = '9999px';
+    badge.style.display = 'flex';
+    badge.style.alignItems = 'center';
+    badge.style.justifyContent = 'center';
+    badge.style.background = 'rgba(12,18,19,0.9)';
+    badge.style.color = '#f5f0e8';
+    badge.style.fontSize = '12px';
+    badge.style.fontWeight = '800';
+    badge.style.border = '1px solid rgba(57,74,77,0.8)';
+
+    ghost.appendChild(badge);
+    document.body.appendChild(ghost);
+    dragPreviewRef.current = ghost;
+    return ghost;
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -212,7 +151,7 @@ export default function SlideBoard() {
     const placements: SlotUpload[] = [];
 
     for (const file of files.slice(0, MAX_FILES)) {
-      const slot = nextPreviews.findIndex((url, idx) => !url && !uploadedInfos[idx] && !pendingSlots.has(idx));
+      const slot = nextPreviews.findIndex((url, idx) => !url && !uploadedInfos[idx] && !nextFiles[idx]);
       if (slot === -1) break;
       nextFiles[slot] = file;
       const url = URL.createObjectURL(file);
@@ -222,13 +161,6 @@ export default function SlideBoard() {
 
     setSlotFiles(nextFiles);
     setPreviews(nextPreviews);
-    if (placements.length) {
-      setFailedSlots((prev) => {
-        const copy = { ...prev };
-        placements.forEach(({ index }) => delete copy[index]);
-        return copy;
-      });
-    }
   };
 
   const handleFileDrop = async (fileList: FileList, targetIndex: number, replaceTarget = false) => {
@@ -257,11 +189,8 @@ export default function SlideBoard() {
         nextInfos[currentIndex] = undefined;
       }
 
-      // Find next open slot (no preview, no uploaded info, not pending).
-      while (
-        currentIndex < MAX_FILES &&
-        (nextPreviews[currentIndex] || nextInfos[currentIndex] || pendingSlots.has(currentIndex))
-      ) {
+      // Find next open slot (no preview, no uploaded info).
+      while (currentIndex < MAX_FILES && (nextPreviews[currentIndex] || nextInfos[currentIndex])) {
         currentIndex += 1;
       }
       if (currentIndex >= MAX_FILES) break;
@@ -277,13 +206,6 @@ export default function SlideBoard() {
     setSlotFiles(nextFiles);
     setPreviews(nextPreviews);
     setUploadedInfos(nextInfos);
-    if (placements.length) {
-      setFailedSlots((prev) => {
-        const copy = { ...prev };
-        placements.forEach(({ index }) => delete copy[index]);
-        return copy;
-      });
-    }
   };
 
   const handleImportFromLibrary = async (importedImages: LibraryImage[]) => {
@@ -294,7 +216,7 @@ export default function SlideBoard() {
 
     const clearedSlots: number[] = [];
     for (const img of importedImages) {
-      const slot = nextPreviews.findIndex((url, idx) => !url && !nextInfos[idx] && !pendingSlots.has(idx));
+      const slot = nextPreviews.findIndex((url, idx) => !url && !nextInfos[idx]);
       if (slot === -1) break;
       if (!img.path || !img.bucket) continue; // skip incomplete records
 
@@ -314,73 +236,35 @@ export default function SlideBoard() {
     setSlotFiles(nextFiles);
     setPreviews(nextPreviews);
     setUploadedInfos(nextInfos);
-    setFailedSlots((prev) => {
-      const copy = { ...prev };
-      clearedSlots.forEach((slot) => delete copy[slot]);
-      return copy;
-    });
   };
 
-  const removeImage = async (index: number) => {
-    const entry = slideEntries[index];
-    const mediaInfo = uploadedInfos[index];
+  const removeImage = (index: number) => {
     revokePreview(previews[index]);
     setSlotFileAt(index, undefined);
     setPreviewAt(index, undefined);
     setUploadedInfoAt(index, undefined);
-    setSlideEntries((prev) => {
-      const next = ensureSlots([...prev]);
-      next[index] = undefined;
-      return next;
-    });
-    setFailedSlots((prev) => {
-      const copy = { ...prev };
-      delete copy[index];
-      return copy;
-    });
-
-    if (currentCarousel?.id && entry?.slideId) {
-      try {
-        await supabase
-          .from('carousel_slide')
-          .delete()
-          .eq('id', entry.slideId)
-          .eq('carousel_id', currentCarousel.id);
-      } catch (err: unknown) {
-        console.error('Failed to delete slide row', err);
-      }
-    }
-
-    if (mediaInfo?.path && mediaInfo?.bucket) {
-      try {
-        await supabase.from('media').delete().eq('path', mediaInfo.path).eq('user_id', user?.id || '');
-      } catch (err: unknown) {
-        console.error('Failed to delete media row', err);
-      }
-    }
-
-    setCurrentCarousel((prev) => {
-      if (!prev) return prev;
-      const nextSlides = ensureSlots<Carousel['slides'][number] | undefined>([...(prev.slides || [])]);
-      nextSlides[index] = undefined;
-      return { ...prev, slides: nextSlides as Carousel['slides'][number][] };
-    });
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
-    if (uploading || pendingSlots.size > 0) return;
+    const hasImage = Boolean(previews[index] || slotFiles[index] || uploadedInfos[index]);
+    if (!hasImage) return;
     setDragIndex(index);
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', String(index));
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      e.dataTransfer.setDragImage(e.currentTarget, rect.width / 2, rect.height / 2);
+      const previewUrl = previews[index];
+      // Use the same fixed ghost size as the mini slide board
+      // so the drag image behavior matches that experience.
+      const ghost = createDragPreview(previewUrl, index, 96, 96);
+      const ghostRect = ghost.getBoundingClientRect();
+      e.dataTransfer.setDragImage(ghost, ghostRect.width / 2, ghostRect.height / 2);
     }
   };
 
   // Drag reorder handled on drop only; no-op helper kept for clarity (not used).
 
   const handleDragEnd = () => {
+    clearDragPreview();
     setDragIndex(null);
   };
 
@@ -393,7 +277,9 @@ export default function SlideBoard() {
   const closePreview = () => setPreviewImage(null);
 
   const handleCardDrop = async (fileList: FileList) => {
-    const targetIndex = previews.findIndex((slot, idx) => !slot && !uploadedInfos[idx] && !pendingSlots.has(idx));
+    const targetIndex = previews.findIndex(
+      (slot, idx) => !slot && !uploadedInfos[idx] && !slotFiles[idx]
+    );
     if (targetIndex === -1) {
       alert('All 10 slots are filled. Remove a slide to add more.');
       return;
@@ -406,7 +292,9 @@ export default function SlideBoard() {
     const targetIndex =
       slotCandidate !== null
         ? slotCandidate
-        : previews.findIndex((slot, idx) => !slot && !uploadedInfos[idx] && !pendingSlots.has(idx));
+        : previews.findIndex(
+            (slot, idx) => !slot && !uploadedInfos[idx] && !slotFiles[idx]
+          );
     if (targetIndex === -1) {
       alert('All 10 slots are filled. Remove a slide to add more.');
       return;
@@ -423,63 +311,45 @@ export default function SlideBoard() {
 
   const handleSlotDrop = async (e: React.DragEvent<HTMLDivElement>, index: number) => {
     e.preventDefault();
-    if (uploading || pendingSlots.size > 0) return;
+    // If files are present, treat this as a new upload into the slot.
     if (e.dataTransfer?.files?.length) {
       await handleFileDrop(e.dataTransfer.files, index, true);
       return;
     }
-    if (dragIndex === null) return;
+
+    // Otherwise, this is an internal drag: swap or move only the two slots.
+    if (dragIndex === null || dragIndex === index) return;
     const from = dragIndex;
     const to = index;
-    setDragIndex(null);
-    if (from === to) return;
 
-    // Work with local copies to keep arrays aligned.
-    const nextPre = ensureSlots([...previews]);
-    const nextFiles = ensureSlots([...slotFiles]);
-    const nextInfos = ensureSlots([...uploadedInfos]);
-    const nextEntries = ensureSlots([...slideEntries]);
-
-    // Ensure we have a preview for the dragged item if it's a local file.
-    if (!nextPre[from] && nextFiles[from]) {
-      nextPre[from] = URL.createObjectURL(nextFiles[from] as File);
-    }
-
-    const move = (arr: Array<unknown | undefined>) => {
-      const moving = arr[from];
-      arr[from] = undefined;
-      if (!arr[to]) {
-        arr[to] = moving;
+    const swapOrMove = <T,>(prev: Array<T | undefined>): Array<T | undefined> => {
+      const next = ensureSlots([...prev]);
+      const source = next[from];
+      const dest = next[to];
+      // Nothing to move.
+      if (typeof source === 'undefined') return next;
+      // If destination is empty, move source and leave origin empty.
+      if (typeof dest === 'undefined') {
+        next[to] = source;
+        next[from] = undefined;
       } else {
-        const empty = (() => {
-          for (let offset = 0; offset < MAX_FILES; offset++) {
-            const r = to + offset;
-            if (r < MAX_FILES && !nextPre[r] && !nextFiles[r] && !nextInfos[r] && !pendingSlots.has(r)) return r;
-            const l = to - offset;
-            if (offset !== 0 && l >= 0 && !nextPre[l] && !nextFiles[l] && !nextInfos[l] && !pendingSlots.has(l)) return l;
-          }
-          return -1;
-        })();
-        if (empty !== -1) {
-          arr[empty] = arr[to];
-          arr[to] = moving;
-        } else {
-          const tmp = arr[to];
-          arr[to] = moving;
-          arr[from] = tmp;
-        }
+        // Otherwise, swap the two.
+        next[from] = dest;
+        next[to] = source;
       }
+      return ensureSlots(next);
     };
 
-    move(nextPre);
-    move(nextFiles);
-    move(nextInfos);
-    move(nextEntries);
+    setSlotFiles((prev) => swapOrMove(prev));
+    setPreviews((prev) => swapOrMove(prev));
+    setUploadedInfos((prev) => swapOrMove(prev));
 
-    setPreviews(ensureSlots(nextPre));
-    setSlotFiles(ensureSlots(nextFiles));
-    setUploadedInfos(ensureSlots(nextInfos));
-    setSlideEntries(ensureSlots(nextEntries));
+    setDragIndex(null);
+  };
+
+  const handleSlotDragEnter = (index: number) => {
+    // Keep for potential hover styling; no auto-reorder while dragging.
+    if (dragIndex === null || dragIndex === index) return;
   };
 
   React.useEffect(() => {
@@ -511,170 +381,47 @@ export default function SlideBoard() {
             } as UploadedFileInfo)
       );
     });
-
-    setSlideEntries((prev) => {
-      if (prev.some((p) => p?.slideId || p?.mediaId)) return prev;
-      return placeSlidesIntoSlots(source.slides, (s) => ({
-        slideId: s.id,
-        mediaId: s.originalMedia?.id,
-      }));
-    });
   }, [navCarousel, currentCarousel, setCurrentCarousel]);
 
-  const imageCount = slotFiles.filter(Boolean).length || previews.filter(Boolean).length || uploadedInfos.filter(Boolean).length;
-  const pendingUploads = pendingSlots.size;
-  const canGenerate = Boolean(imageCount && !uploading && !creating && pendingUploads === 0);
-  const generateLabel =
-    creating ? 'Creating...' : uploading || pendingUploads ? 'Please wait' : 'Generate';
+  const imageCount =
+    slotFiles.filter(Boolean).length ||
+    previews.filter(Boolean).length ||
+    uploadedInfos.filter(Boolean).length;
+  const canGenerate = imageCount > 0;
+  const generateLabel = 'Next';
   const buttonImageSrc = canGenerate ? '/Next%20Button.png' : '/Deactivated%20Next%20Button.png';
 
-  const persistCarouselState = async (silent = false) => {
-    await uploadAllMissing();
+  const handleNextStep = () => {
+    if (!canGenerate) return;
 
-    // Ensure any remaining local files get uploaded before we bail out.
-    const needsUpload: number[] = [];
-    slotFiles.forEach((file, idx) => {
-      if (file && !uploadedInfos[idx]) needsUpload.push(idx);
-    });
-    for (const idx of needsUpload) {
-      await uploadSlot(idx);
-    }
+    const activeCarouselId = currentCarousel?.id || navCarousel?.id;
+    if (!activeCarouselId) return;
 
-    const filesWithIndex: Array<{ meta: UploadedFileInfo; index: number }> = [];
-    for (let i = 0; i < uploadedInfos.length; i++) {
-      const meta = uploadedInfos[i];
-      if (meta) filesWithIndex.push({ meta, index: i });
-    }
-    if (!filesWithIndex.length) {
-      if (!silent) alert('Add at least one image before continuing (upload may have failed).');
-      return null;
-    }
+    const drafts: SlideDraft[] = [];
+    for (let index = 0; index < MAX_FILES; index++) {
+      const file = slotFiles[index];
+      const info = uploadedInfos[index];
+      if (!file && !info) continue;
 
-    if (!user) {
-      if (!silent) alert('Please log in before continuing.');
-      return null;
-    }
-
-    const session = await supabase.auth.getSession();
-    if (!session.data.session) {
-      if (!silent) alert('Your session expired. Please log in again.');
-      return null;
-    }
-    const sessionData = session.data.session;
-    try {
-      await supabase.auth.setSession({
-        access_token: sessionData.access_token,
-        refresh_token: sessionData.refresh_token ?? '',
-      });
-    } catch (err: unknown) {
-      console.error('Failed to sync Supabase session:', err);
-    }
-
-    const title = 'Untitled Carousel';
-    let targetCarouselId = currentCarousel?.id;
-
-    if (!targetCarouselId) {
-      const payload = {
-        title,
-        files: filesWithIndex.map(({ meta }) => ({
-          bucket: meta.bucket,
-          path: meta.path,
-          mime_type: meta.mime_type || 'application/octet-stream',
-          size_bytes: meta.size_bytes || 0,
-        })),
-        aspect: 'square',
-        status: 'draft',
-      };
-      const { data, error } = await supabase.functions.invoke<{ carouselId?: string; carousel_id?: string }>('create-carousel', {
-        body: payload,
-      });
-      if (error) throw error;
-      targetCarouselId = data?.carouselId || data?.carousel_id || undefined;
-      if (!targetCarouselId) throw new Error('Missing carouselId from create-carousel response.');
-      const createdAtDisplay = new Date().toLocaleDateString();
-      const carouselPayload = {
-        id: targetCarouselId,
-        title,
-        caption: title,
-        description: title,
-        createdAt: createdAtDisplay,
-        style: 'minimalist' as const,
-        status: 'draft',
-        slides: [],
-      };
-      addCarousel(carouselPayload as Carousel);
-      setCurrentCarousel(carouselPayload as Carousel);
-    }
-
-    if (targetCarouselId) {
-      await supabase.from('carousel_slide').delete().eq('carousel_id', targetCarouselId);
-
-      const rows = filesWithIndex.map(({ meta, index }) => ({
-        user_id: user.id,
-        carousel_id: targetCarouselId,
-        position: index + 1,
-        media_id: (meta as UploadedFileInfo & { id?: string }).id,
-      }));
-
-      if (rows.length) {
-        const { data: inserted, error } = await supabase
-          .from('carousel_slide')
-          .insert(rows)
-          .select('id');
-        if (error) throw error;
-
-        const newEntries = ensureSlots([...slideEntries]);
-        inserted?.forEach((row, idx) => {
-          newEntries[idx] = { slideId: row.id, mediaId: rows[idx]?.media_id };
+      if (file) {
+        drafts.push({ kind: 'file', index, file });
+      } else if (info?.bucket && info?.path) {
+        drafts.push({
+          kind: 'existing',
+          index,
+          bucket: info.bucket,
+          path: info.path,
         });
-        setSlideEntries(newEntries);
       }
-
-      const slides = filesWithIndex.map(({ meta, index }) => ({
-        id: slideEntries[index]?.slideId || meta.path || String(index),
-        image: previews[index] || '',
-        caption: '',
-        position: index + 1,
-        originalMedia: meta,
-      }));
-
-      setCurrentCarousel((prev) => {
-        const base = prev && prev.id === targetCarouselId ? prev : ({ id: targetCarouselId } as Carousel);
-        return {
-          ...base,
-          title,
-          caption: title,
-          description: title,
-          slides,
-          status: base.status || 'draft',
-          style: base.style || 'minimalist',
-          createdAt: base.createdAt || new Date().toLocaleDateString(),
-        };
-      });
     }
+    if (!drafts.length) return;
 
-    return targetCarouselId || null;
-  };
-
-  const handleNextStep = async () => {
-    if (creating || uploading) return;
-    setCreating(true);
-    try {
-      const carouselId = await persistCarouselState();
-      if (!carouselId) return;
-      navigate(`/generate-caption/${carouselId}`, {
-        state: {
-          carouselId,
-          carousel: currentCarousel,
-        },
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      console.error('Next step error', err);
-      alert(message);
-    } finally {
-      setCreating(false);
-    }
+    navigate(`/generate-caption/${activeCarouselId}`, {
+      state: {
+        carousel: currentCarousel ?? navCarousel ?? null,
+        slideDrafts: drafts,
+      },
+    });
   };
 
   React.useEffect(() => {
@@ -691,70 +438,31 @@ export default function SlideBoard() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [previewImage]);
-
-  // Best-effort save when leaving the page (browser close or route change unmount).
   React.useEffect(() => {
-    const handleBeforeUnload = () => {
-      void persistCarouselState(true);
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
-      void persistCarouselState(true);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      clearDragPreview();
     };
   }, []);
-
-  // Maintain blob preview URLs for local files so they remain visible (no state updates during render).
-  React.useEffect(() => {
-    setPreviews((prev) => {
-      const next = ensureSlots([...prev]);
-      let changed = false;
-
-      slotFiles.forEach((file, idx) => {
-        if (file) {
-          if (!next[idx] || next[idx]?.startsWith('blob:') === false) {
-            if (next[idx]?.startsWith('blob:')) {
-              URL.revokeObjectURL(next[idx] as string);
-            }
-            next[idx] = URL.createObjectURL(file);
-            changed = true;
-          }
-        } else {
-          if (next[idx]?.startsWith('blob:')) {
-            URL.revokeObjectURL(next[idx] as string);
-            next[idx] = undefined;
-            changed = true;
-          }
-        }
-      });
-
-      return changed ? ensureSlots(next) : prev;
-    });
-
-    return () => {
-      previews.forEach((url) => {
-        if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
-      });
-    };
-  }, [slotFiles, previews]);
-
-  // Ensure local files always have a preview URL (purely visual, no Supabase).
-  React.useEffect(() => {
-    setPreviews((prev) => {
-      const next = ensureSlots([...prev]);
-      slotFiles.forEach((file, idx) => {
-        if (file && !next[idx]) {
-          next[idx] = URL.createObjectURL(file);
-        }
-      });
-      return ensureSlots(next);
-    });
-  }, [slotFiles]);
 
 
   return (
     <div className="min-h-screen bg-ink text-vanilla">
       <Navbar />
+      <input
+        ref={dropzoneFileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (!e.target.files?.length) return;
+          // Reuse the bulk upload handler so the dropzone click
+          // behaves like drag-dropping multiple files.
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          handleImageUpload(e as unknown as React.ChangeEvent<HTMLInputElement>);
+          e.target.value = '';
+        }}
+      />
       <input
         ref={slotFileInputRef}
         type="file"
@@ -787,16 +495,15 @@ export default function SlideBoard() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-3">
-                    <label className={`inline-flex items-center px-4 py-2 text-sm font-semibold text-sand rounded-lg cursor-pointer bg-[#225561] hover:bg-[#2f7f90] transition-colors shadow-soft ${uploading ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                    <label className="inline-flex items-center px-4 py-2 text-sm font-semibold text-sand rounded-lg cursor-pointer bg-[#225561] hover:bg-[#2f7f90] transition-colors shadow-soft">
                       <Upload className="h-4 w-4 mr-2" />
-                      {uploading ? 'Uploading…' : 'Add files'}
+                      Add files
                       <input
                         type="file"
                         multiple
                         accept="image/*"
                         onChange={handleImageUpload}
                         className="hidden"
-                        disabled={uploading}
                       />
                     </label>
                     <span className="text-vanilla/60">or</span>
@@ -824,16 +531,15 @@ export default function SlideBoard() {
                       }
                     }}
                     onClick={() => {
-                      if (uploading || pendingSlots.size > 0) return;
                       const targetIndex = previews.findIndex(
-                        (slot, idx) => !slot && !uploadedInfos[idx] && !pendingSlots.has(idx)
+                        (slot, idx) => !slot && !uploadedInfos[idx] && !slotFiles[idx]
                       );
                       if (targetIndex === -1) {
                         alert('All 10 slots are filled. Remove a slide to add more.');
                         return;
                       }
                       slotTargetRef.current = targetIndex;
-                      slotFileInputRef.current?.click();
+                      dropzoneFileInputRef.current?.click();
                     }}
                   >
                     <p className="text-center text-sm text-[#223535] transition-colors duration-150 group-hover:text-[rgba(64,160,178,0.65)]">
@@ -846,73 +552,12 @@ export default function SlideBoard() {
 
               {/* Slide Board */}
               <div className="relative">
-              <div className="sf-card px-5 pt-4 pb-4 space-y-4 relative overflow-visible">
-                <div className="absolute top-0 left-0 h-5 w-16 overflow-hidden rounded-tl-lg pointer-events-none select-none">
-                  <img
-                    src="/retro-slide.png"
-                    alt="Retro accent"
-                    className="h-full w-auto max-w-none object-contain pointer-events-none select-none"
-                  />
-                </div>
-                  <div className="absolute right-[24px] top-2 z-30 flex items-center gap-4 -translate-y-[34px] translate-x-4">
-                    {!canGenerate && (
-                      <span className="text-xs text-vanilla/60 whitespace-nowrap">
-                        Hint: Add an image to continue.
-                      </span>
-                    )}
-                    <div className="text-xs text-vanilla/70">
-                      {uploading
-                        ? 'Uploading files...'
-                        : pendingUploads
-                        ? 'Finalizing uploads...'
-                        : ''}
-                    </div>
-                    <div className="relative w-24 h-20 group">
-                      <div
-                        className="absolute inset-0 z-0 rounded-[4px] bg-[#0c0c0c] pointer-events-none"
-                        aria-hidden="true"
-                      />
-                      <button
-                        onClick={handleNextStep}
-                        disabled={!canGenerate}
-                        className={`group relative z-10 flex items-center justify-center rounded-[4px] w-full h-full overflow-hidden border transition-transform duration-200 ease-out transform-gpu ${
-                          canGenerate
-                            ? 'border-transparent shadow-lg shadow-pacific/30 hover:shadow-pacific/50 group-hover:translate-x-1'
-                            : 'bg-surface opacity-70 border-charcoal/50 cursor-not-allowed pointer-events-none shadow-none'
-                        }`}
-                        aria-label="Generate carousel"
-                        tabIndex={canGenerate ? 0 : -1}
-                        aria-disabled={!canGenerate}
-                        type="button"
-                      >
-                        <img
-                          src={buttonImageSrc}
-                          alt=""
-                          aria-hidden="true"
-                          className="absolute inset-0 block w-full h-full object-cover select-none pointer-events-none"
-                        />
-                        {canGenerate && (
-                          <span className="absolute inset-0 z-10 flex items-center justify-center text-xl font-extrabold leading-tight text-white drop-shadow-sm">
-                            Click
-                          </span>
-                        )}
-                        {(creating || uploading || pendingUploads > 0) && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-ink/55 text-xs font-semibold text-vanilla">
-                            {generateLabel}
-                          </div>
-                        )}
-                        <span className="sr-only">{generateLabel}</span>
-                      </button>
-                    </div>
-                    <img
-                      src="/blue_arrow.png"
-                      alt=""
-                      aria-hidden="true"
-                      className={`w-4 h-auto sf-arrow-wiggle select-none pointer-events-none transition-opacity duration-150 ${
-                        canGenerate ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    />
-                  </div>
+              <div className="sf-card px-5 pt-4 pb-4 space-y-4 relative overflow-hidden">
+                <img
+                  src="/retro-slide.png"
+                  alt="Retro accent"
+                  className="absolute top-0 left-0 h-5 w-auto max-w-none object-contain pointer-events-none select-none"
+                />
                   <div className="flex items-center justify-between">
                     <div className="flex items-start gap-3">
                       <div className="flex-none h-9 w-9 rounded-full bg-[#225561] text-vanilla font-black flex items-center justify-center text-xl leading-none translate-y-2">
@@ -930,21 +575,8 @@ export default function SlideBoard() {
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
                       {Array.from({ length: MAX_FILES }, (_, index) => {
                         const file = slotFiles[index];
-                        let preview = previews[index];
-                        // Fallback: if we have a file and no preview yet, create one on the fly.
-                        if (file && !preview) {
-                          const url = URL.createObjectURL(file);
-                          preview = url;
-                          setPreviews((prev) => {
-                            const next = ensureSlots([...prev]);
-                            next[index] = url;
-                            return next;
-                          });
-                        }
-
-                        const hasImage = Boolean(preview || file || uploadedInfos[index] || pendingSlots.has(index));
-                        const failedMessage = failedSlots[index];
-                        const isPending = pendingSlots.has(index);
+                        const preview = previews[index];
+                        const hasImage = Boolean(preview || file || uploadedInfos[index]);
                         const isDragging = dragIndex === index;
                         return (
                           <div
@@ -959,11 +591,10 @@ export default function SlideBoard() {
                             onDragOver={(e) => {
                               e.preventDefault();
                               if (e.dataTransfer) {
-                                e.dataTransfer.dropEffect = 'copy';
+                                e.dataTransfer.dropEffect = dragIndex !== null ? 'move' : 'copy';
                               }
                             }}
-                            onDragLeave={(e) => e.preventDefault()}
-                            onDragEnter={(e) => e.preventDefault()}
+                            onDragEnter={() => handleSlotDragEnter(index)}
                             onDragEnd={hasImage ? handleDragEnd : undefined}
                             onDrop={(e) => handleSlotDrop(e, index)}
                             onDoubleClick={
@@ -988,22 +619,6 @@ export default function SlideBoard() {
                                     Preview unavailable
                                   </div>
                                 )}
-                                {failedMessage ? (
-                                  <div className="absolute inset-0 bg-ink/80 backdrop-blur-[2px] flex flex-col items-center justify-center text-xs text-red-200 gap-2 px-3 text-center">
-                                    <span>{failedMessage}</span>
-                                    <button
-                                      onClick={() => retryUpload(index)}
-                                      className="px-3 py-1 rounded bg-pacific text-white text-xs font-semibold hover:bg-pacific-deep"
-                                    >
-                                      Retry
-                                    </button>
-                                  </div>
-                                ) : isPending ? (
-                                  <div className="absolute inset-0 bg-ink/70 backdrop-blur-[2px] flex flex-col items-center justify-center text-xs text-vanilla/80 gap-2">
-                                    <div className="h-5 w-5 border-2 border-vanilla/60 border-t-transparent rounded-full animate-spin" />
-                                    <span>Saving...</span>
-                                  </div>
-                                ) : null}
                                 <button
                                   onClick={() => removeImage(index)}
                                   className="absolute top-2 right-2 bg-surface text-vanilla rounded-full p-1 shadow opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1022,6 +637,53 @@ export default function SlideBoard() {
                     </div>
                   </div>
                 </div>
+              </div>
+              <div className="pointer-events-none absolute right-[24px] -top-2 z-40 flex items-center gap-4 translate-x-4">
+                {!canGenerate && (
+                  <span className="text-xs text-vanilla/60 whitespace-nowrap">
+                    Hint: Add an image to continue.
+                  </span>
+                )}
+                <div className="relative w-24 h-20 group pointer-events-auto">
+                  <div
+                    className="absolute inset-0 z-0 rounded-[4px] bg-[#0c0c0c]"
+                    aria-hidden="true"
+                  />
+                  <button
+                    onClick={handleNextStep}
+                    disabled={!canGenerate}
+                    className={`group relative z-10 flex items-center justify-center rounded-[4px] w-full h-full overflow-hidden border transition-transform duration-200 ease-out transform-gpu ${
+                      canGenerate
+                        ? 'border-transparent shadow-lg shadow-pacific/30 hover:shadow-pacific/50 group-hover:translate-x-1'
+                        : 'bg-surface opacity-70 border-charcoal/50 cursor-not-allowed pointer-events-none shadow-none'
+                    }`}
+                    aria-label="Generate carousel"
+                    tabIndex={canGenerate ? 0 : -1}
+                    aria-disabled={!canGenerate}
+                    type="button"
+                  >
+                    <img
+                      src={buttonImageSrc}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute inset-0 block w-full h-full object-cover select-none pointer-events-none"
+                    />
+                    {canGenerate && (
+                      <span className="absolute inset-0 z-10 flex items-center justify-center text-xl font-extrabold leading-tight text-white drop-shadow-sm">
+                        Click
+                      </span>
+                    )}
+                    <span className="sr-only">{generateLabel}</span>
+                  </button>
+                </div>
+                <img
+                  src="/blue_arrow.png"
+                  alt=""
+                  aria-hidden="true"
+                  className={`w-4 h-auto sf-arrow-wiggle select-none pointer-events-none transition-opacity duration-150 ${
+                    canGenerate ? 'opacity-100' : 'opacity-0'
+                  }`}
+                />
               </div>
               </div>
 
