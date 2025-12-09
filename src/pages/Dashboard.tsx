@@ -9,7 +9,6 @@ import {
   Copy, 
   Trash2, 
   Download, 
-  CalendarCheck2,
   CalendarDays,
   TrendingUp,
   Star,
@@ -218,10 +217,6 @@ export default function Dashboard() {
 
   // Calculate time saved (assuming each carousel saves ~2.5 hours of manual work)
   const timeSavedHours = user ? Math.round(user.carouselsGenerated * 2.5 * 10) / 10 : 0;
-
-  const scrollToCalendar = () => {
-    calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
 
   // Drag and Drop Handlers
   const handleDragStart = (carouselId: string) => (e: React.DragEvent) => {
@@ -492,13 +487,6 @@ export default function Dashboard() {
                       <Sparkles className="h-5 w-5" />
                       SlideFlow Studio
                     </Link>
-                    <button
-                      onClick={scrollToCalendar}
-                      className="sf-btn-secondary"
-                    >
-                      <CalendarCheck2 className="h-5 w-5 mr-2" />
-                      Schedule Calendar
-                    </button>
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-xs text-vanilla/60">
